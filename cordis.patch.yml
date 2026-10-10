@@ -1,0 +1,5 @@
+- insert:
+    - id: llm-deepseek-gateway
+      name: dsh-deepseek-gateway
+      config:
+        providers: {}

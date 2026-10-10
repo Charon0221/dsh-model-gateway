@@ -1,0 +1,11 @@
+llm-deepseek-gateway:
+  providers:
+    senjix:
+      displayName: 深极云算
+      baseURL: https://senjix.cloud/v1
+      apiKeyEnv: SENJIX_API_KEY
+      models:
+        - id: deepseek-v4.1-flash
+          name: DeepSeek V4.1 Flash
+          inputModalities: [text]
+      reasoningEffort: high

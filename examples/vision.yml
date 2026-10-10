@@ -1,0 +1,12 @@
+llm-deepseek-gateway:
+  providers:
+    vision-gateway:
+      displayName: 视觉网关
+      baseURL: https://gateway.example/v1
+      apiKeyEnv: VISION_GATEWAY_API_KEY
+      models:
+        - id: deepseek-vision
+          inputModalities: [text, image]
+          imagePixelBudget: 640000
+          imageMaxBytes: 1048576
+      maxInlineRequestImageBytes: 20971520
