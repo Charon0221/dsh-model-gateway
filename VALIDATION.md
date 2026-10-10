@@ -5,9 +5,11 @@
 本地自动化验收覆盖：
 
 - 自动化测试覆盖：SSE UTF-8 分片、推理与文本交错、分片工具参数、多工具身份、工具结果图片、尾部 usage、空响应、异常 JSON、断流、取消、超时、鉴权/限流/额度/上下文/协议错误、配置动态增删与 revision 冲突、无效更新回滚、页面发现失败与手工模型保存、模型发现鉴权与去重。
+- 13 项测试通过，包括发布客户端的模块加载、插槽注册与卸载清理。
 - `npm run typecheck` 和 `npm run build` 通过。
 - 浏览器产物使用 dsh `window.__ModuleLoader__` 入口，Host 产物为独立 ESM。
 - 独立 `DSH_HOME` 下执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现“第三方 DeepSeek”及两个添加按钮。
+- 桌面端安装使用同一 bundle patch 和官方 `web` 客户端声明。GitHub 仓库提交 `lib` 构建产物，适合通过桌面端的 GitHub URL 输入框安装。另一台机器的桌面端安装尚未实机执行；当前验证覆盖本机相同 Web 渲染模块与隔离 profile。
 
 真实验收脚本：
 

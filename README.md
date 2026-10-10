@@ -13,9 +13,15 @@ npm pack
 dsh plugin --profile web add .\dsh-deepseek-gateway-0.1.0.tgz
 ```
 
-也可以在 dsh 的插件设置页通过安装对话框输入公开仓库地址 `https://github.com/Charon0221/dsh-deepseek-gateway`、本地项目目录或发布的 `.tgz`。仓库包含构建产物，无需在 dsh 中编译。安装后重启对应 profile。插件不修改 dsh 源码。
+**其他电脑的 DeepSeek Harness 桌面端：** 在“设置 → 插件 → 添加插件”的输入框粘贴：
 
-本地开发链接：先 `npm run build`，再运行 `dsh plugin --profile web link D:\git\dsh`。更新源码后重新构建并重启 profile。公开 GitHub 仓库包含 Host 和浏览器入口，安装命令也可使用：
+```text
+https://github.com/Charon0221/dsh-deepseek-gateway
+```
+
+仓库包含构建产物，无需在目标电脑上编译 TypeScript。也可以下载 [v0.1.0 安装包](https://github.com/Charon0221/dsh-deepseek-gateway/releases/download/v0.1.0/dsh-deepseek-gateway-0.1.0.tgz)，输入该文件的本地完整路径。安装后按桌面端提示重启，再到 Models 页添加第三方网关；每台电脑单独配置凭据。插件声明 `platform: web` 与官方 Models UI 一致，供桌面端的 Web 渲染页面加载，无须改为 `desktop`。不修改 dsh 源码。
+
+本地开发链接：先 `npm run build`，再运行 `dsh plugin --profile web link D:\git\dsh-deepseek-gateway`。更新源码后重新构建并重启 profile。公开 GitHub 仓库包含 Host 和浏览器入口，安装命令也可使用：
 
 ```powershell
 dsh plugin --profile web add github:Charon0221/dsh-deepseek-gateway
@@ -23,7 +29,7 @@ dsh plugin --profile web add github:Charon0221/dsh-deepseek-gateway
 
 ## 配置
 
-在 Models 页点击“添加第三方 DeepSeek”，或将 [examples/senjix.yml](examples/senjix.yml) 合并到 dsh 设置文件。通过启动 patch 配置时使用 [examples/senjix.patch.yml](examples/senjix.patch.yml)，例如 `dsh --profile web --patch D:\git\dsh\examples\senjix.patch.yml`。API Key 只通过 dsh 凭据服务或启动环境变量读取；示例中的 `SENJIX_API_KEY` 是凭据引用，不是密钥。
+在 Models 页点击“添加第三方 DeepSeek”，或将 [examples/senjix.yml](examples/senjix.yml) 合并到 dsh 设置文件。通过启动 patch 配置时使用 [examples/senjix.patch.yml](examples/senjix.patch.yml)，例如 `dsh --profile web --patch D:\git\dsh-deepseek-gateway\examples\senjix.patch.yml`。API Key 只通过 dsh 凭据服务或启动环境变量读取；示例中的 `SENJIX_API_KEY` 是凭据引用，不是密钥。
 
 ```yaml
 llm-deepseek-gateway:
