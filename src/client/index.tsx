@@ -43,7 +43,7 @@ export function GatewayCard({ provider, scope, operations, taken }: Injected & P
   return <div className="dsg-panel">
     {open ? <GatewayEditor key={route} route={route} initial={profile} revision={state.revision!} taken={taken()} writable={state.writable} operations={operations} onClose={() => setOpen(false)} />
       : <div className="dsg-actions"><button type="button" onClick={() => setOpen(true)}>编辑网关与模型能力</button><button type="button" disabled={!state.writable || busy || fromBase} onClick={() => setConfirmDelete(true)}>删除本网关</button></div>}
-    {confirmDelete && <div role="alertdialog" aria-label={`删除 ${route}`}><p>确认删除网关 {route}？凭据保留在 dsh 中，可在凭据管理中单独删除。</p><button type="button" disabled={busy} onClick={remove}>确认删除</button><button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>取消</button></div>}
+    {confirmDelete && <div role="alertdialog" aria-label={`删除 ${route}`}><p>确认删除网关 {route}？凭据保留在 dsh 中；如需删除密钥，请先在网关编辑器中操作。</p><button type="button" disabled={busy} onClick={remove}>确认删除</button><button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>取消</button></div>}
     {fromBase && <p className="dsg-hint">该网关来自组合配置；请在对应 patch 中移除。</p>}
     {failure && <p role="alert" className="dsg-error">{failure}</p>}
   </div>;

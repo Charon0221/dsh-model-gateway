@@ -4,6 +4,11 @@
   "description": "第三方 DeepSeek Chat Completions 适配器与 dsh Models 页面扩展",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Charon0221/dsh-deepseek-gateway.git"
+  },
+  "engines": { "node": ">=22" },
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {

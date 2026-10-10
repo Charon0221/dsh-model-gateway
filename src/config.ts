@@ -65,6 +65,7 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
     });
     const effort = raw.reasoningEffort ?? 'high';
     if (!EFFORTS.includes(effort)) throw new LlmError(`${route}: 不支持的推理强度`, 'INVALID_CONFIG');
+    if (raw.apiKeyEnv !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw.apiKeyEnv)) throw new LlmError(`${route}: 凭据引用须是有效环境变量名`, 'INVALID_CONFIG');
     const headers: Record<string, string> = {};
     for (const [name, value] of Object.entries(raw.headers ?? {})) {
       if (/^(authorization|proxy-authorization|content-type|accept|host|cookie|set-cookie|x-deepseek-harness-.*)$/i.test(name)) throw new LlmError(`${route}: 不允许覆盖鉴权、协议或 harness 归因标头`, 'INVALID_CONFIG');

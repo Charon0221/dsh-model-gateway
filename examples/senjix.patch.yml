@@ -1,0 +1,12 @@
+# dsh --profile web --patch <此文件路径>
+- id: llm-deepseek-gateway
+  config:
+    providers:
+      senjix:
+        displayName: 深极云算
+        baseURL: https://senjix.cloud/v1
+        apiKeyEnv: SENJIX_API_KEY
+        models:
+          - id: deepseek-v4.1-flash
+            inputModalities: [text]
+        reasoningEffort: high
