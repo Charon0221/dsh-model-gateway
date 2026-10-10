@@ -7,7 +7,12 @@ export interface Config {
 }
 export declare const ModelSchema: z<GatewayModel>;
 export declare const ProfileSchema: z<GatewayProfile>;
-export declare const Config: z<Config>;
+export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+    providers: z<NoInfer<import("@deepseek-ai/cosmokit").Dict<GatewayProfile, string>>, NoInfer<import("@deepseek-ai/cosmokit").Dict<GatewayProfile, string>>, "volatile-defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    providers: z<NoInfer<import("@deepseek-ai/cosmokit").Dict<GatewayProfile, string>>, NoInfer<import("@deepseek-ai/cosmokit").Dict<GatewayProfile, string>>, "volatile-defined">;
+}>>, "defined">;
+export type LiveConfig = ReturnType<typeof Config>;
 export interface ResolvedProfile extends Omit<GatewayProfile, 'apiKeyEnv' | 'retryPolicy'> {
     route: string;
     displayName: string;

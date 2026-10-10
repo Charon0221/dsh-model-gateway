@@ -7,9 +7,10 @@ import type {} from '@deepseek-ai/dsh-settings';
 import type {} from '@deepseek-ai/dsh-credentials';
 import type {} from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-fs';
+import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment';
 import { GatewayAdapter } from './adapter.js';
-import { Config, resolveProfiles, type ResolvedProfile } from './config.js';
+import { Config, resolveProfiles, type ResolvedProfile, type LiveConfig } from './config.js';
 import { discoverModels } from './discovery.js';
 import { NS } from './shared.js';
 
@@ -18,8 +19,8 @@ export type { GatewayModel, GatewayProfile, Effort } from './shared.js';
 export const name = NS;
 export const inject = ['llm'];
 
-export function apply(ctx: Context, config: Config): void {
-  let source = () => config;
+export function apply(ctx: Context, config: LiveConfig): void {
+  const source = (): import('./config.js').Config => ({ providers: config.providers.get() as import('./config.js').Config['providers'] });
   let raw = source();
   let profiles = resolveProfiles(raw);
   let registration: AdapterRegistrationHandle | undefined;
@@ -34,8 +35,12 @@ export function apply(ctx: Context, config: Config): void {
   };
   const synchronize = () => {
     const nextRaw = source();
-    if (raw === nextRaw && registration) return;
+    if (raw.providers === nextRaw.providers && registration) return;
     const next = resolveProfiles(nextRaw);
+    const owned = new Set(profiles.keys());
+    const taken = ctx.llm.listProviders().filter(p => !owned.has(p.id));
+    const declared = ctx.llm.listConfigurableProviders().filter(p => p.settingsNs !== NS);
+    if ([...next.keys()].some(id => taken.some(p => p.id === id) || declared.some(p => p.provider === id))) throw new LlmError('提供方 ID 已被其他适配器占用', 'DUPLICATE_ADAPTER');
     const previous = profiles;
     // adapter metadata must read the candidate while the registry validates it.
     profiles = next;
@@ -56,11 +61,22 @@ export function apply(ctx: Context, config: Config): void {
     } finally { synchronizing = false; }
   };
   const current = () => {
-    if (!synchronizing && raw !== source() && rejected !== source()) {
+    if (!synchronizing && raw.providers !== source().providers && rejected?.providers !== source().providers) {
       try { synchronize(); } catch { rejected = source(); ctx.logger.warn('第三方 DeepSeek 配置未生效，保留最后有效网关配置'); }
     }
     return profiles;
   };
+  ctx.on('internal/config', function (_candidate, next) {
+    const candidate = next();
+    if (this !== ctx.fiber) return candidate;
+    const validated = Config(candidate);
+    const parsed = resolveProfiles({ providers: validated.providers.get() as import('./config.js').Config['providers'] });
+    const owned = new Set(profiles.keys());
+    const taken = ctx.llm.listProviders().filter(p => !owned.has(p.id));
+    const declared = ctx.llm.listConfigurableProviders().filter(p => p.settingsNs !== NS);
+    if ([...parsed.keys()].some(id => taken.some(p => p.id === id) || declared.some(p => p.provider === id))) throw new LlmError('提供方 ID 已被其他适配器占用', 'DUPLICATE_ADAPTER');
+    return candidate;
+  });
   const adapter = new GatewayAdapter({
     profiles: current, resolveApiKey: key,
     serializationServices: () => {
@@ -75,17 +91,8 @@ export function apply(ctx: Context, config: Config): void {
   });
   synchronize();
   ctx.llm.registerModelDiscovery(NS, (request, signal) => discoverModels(request, current(), key, signal));
+  ctx.on('loader/volatile-update', () => { current(); });
   ctx.inject(['settings'], settingsCtx => {
-    settingsCtx.settings.installSection(ctx, NS, Config, config, {
-      setSource: next => { source = next; },
-      validate: value => {
-        const proposed = resolveProfiles(value);
-        const owned = new Set(profiles.keys());
-        const taken = ctx.llm.listProviders().filter(p => !owned.has(p.id));
-        const declared = ctx.llm.listConfigurableProviders().filter(p => p.settingsNs !== NS);
-        if ([...proposed.keys()].some(id => taken.some(p => p.id === id) || declared.some(p => p.provider === id))) throw new LlmError('提供方 ID 已被其他适配器占用', 'DUPLICATE_ADAPTER');
-      },
-      onChange: synchronize,
-    });
+    settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber));
   });
 }

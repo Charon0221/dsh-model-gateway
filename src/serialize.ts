@@ -1,7 +1,7 @@
 import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment';
 import {
-  LlmError, contentHasImage, offloadRequestImagesWithPolicy, offloadedImageText,
-  requestImageHandleText, fileHandleText,
+  LlmError, contentHasImage, projectOffloadedImages, requiredImageOffload, projectImagesForTextModel, offloadedImageText,
+  requestImageHandleText, fileHandleText, projectToolUpdates,
   type ContentBlock, type GenerateOptions, type ImageAttachmentAccessResolver,
 } from '@deepseek-ai/dsh-llm';
 import { EFFORTS, type GatewayModel } from './shared.js';
@@ -26,9 +26,10 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
   const effort = options.purpose === 'session-title' ? 'off' : options.reasoningEffort ?? profile.reasoningEffort;
   if (!EFFORTS.includes(effort as typeof EFFORTS[number])) throw new LlmError('不支持的 DeepSeek 推理强度', 'UNSUPPORTED_REASONING_EFFORT');
   const imageCapable = model?.inputModalities?.includes('image') === true;
-  const hasImages = options.messages.some(m => contentHasImage(m.content));
-  for (const message of options.messages) {
-    if (message.role !== 'user' && contentHasImage(message.content)) throw new LlmError(`无法发送 ${message.role} 消息中的图片`, 'UNSUPPORTED_CONTENT');
+  const projected = projectToolUpdates(options.messages, options.tools, undefined, options.toolHistory);
+  const hasImages = projected.messages.some(m => contentHasImage(m.content));
+  for (const message of projected.messages) {
+    if (message.role !== 'user' && message.role !== 'tool' && contentHasImage(message.content)) throw new LlmError(`无法发送 ${message.role} 消息中的图片`, 'UNSUPPORTED_CONTENT');
   }
   // History may contain images from a previously selected vision model. Preserve a
   // handle on a text route; the dsh upload gate rejects new unsupported images.
@@ -38,24 +39,25 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
     const refs: ImageAttachmentRef[] = [];
     const collect = (blocks: readonly ContentBlock[]) => {
       for (const block of blocks) {
-        if (block.type === 'image') refs.push(block.attachment);
-        if (block.type === 'tool-result') collect(block.content);
+        if (block.type === 'image' && !block.offloaded) refs.push(block.attachment);
       }
     };
-    options.messages.forEach(m => collect(m.content));
-    const policy = imagePolicy(model!);
+    projected.messages.forEach(m => collect(m.content));
     for (const ref of refs) {
       options.signal?.throwIfAborted();
-      if (!versions.has(ref.attachmentId)) versions.set(ref.attachmentId, await services.attachments.readImageRequest(ref, policy, options.signal));
+      if (!versions.has(ref.attachmentId)) versions.set(ref.attachmentId, await services.attachments.readImageRequest(ref, imagePolicy(model!, ref), options.signal));
     }
   }
-  const messages = hasImages ? offloadRequestImagesWithPolicy(options.messages, {
-    representation: 'base64', maxBytes: imageCapable ? profile.maxInlineRequestImageBytes : 0,
-    maxImages: imageCapable ? profile.maxImagesPerRequest : 0,
-    byteQuantum: Math.min(profile.maxInlineRequestImageBytes, 10 * 1024 * 1024), countQuantum: 20,
-    byteLength: ref => versions.get(ref.attachmentId)?.bytes ?? ref.bytes,
-    placeholder: ref => offloadedImageText(ref, services.resolveImageAccess?.(ref)),
-  }) : options.messages;
+  if (imageCapable && hasImages) {
+    const offloadImages = requiredImageOffload(projected.messages, {
+      representation: 'base64', maxBytes: profile.maxInlineRequestImageBytes, maxImages: profile.maxImagesPerRequest,
+      byteQuantum: Math.min(profile.maxInlineRequestImageBytes, 10 * 1024 * 1024), countQuantum: 20,
+    }, block => versions.get(block.attachment.attachmentId)?.bytes ?? block.attachment.bytes);
+    if (offloadImages) throw new LlmError('内联图片超过请求上限，需由 dsh 卸载最旧图片后重试', 'IMAGE_OFFLOAD_REQUIRED', { offloadImages });
+  }
+  const messages = hasImages ? imageCapable
+    ? projectOffloadedImages(projected.messages, ref => offloadedImageText(ref, services.resolveImageAccess?.(ref)))
+    : projectImagesForTextModel(projected.messages) : projected.messages;
 
   const partsFor = (blocks: readonly ContentBlock[]): WirePart[] => {
     const parts: WirePart[] = [];
@@ -74,7 +76,6 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
           parts.push({ type: 'text', text: fileHandleText(block.attachment, host ? services.resolveFilePath?.(host) : undefined) });
           break;
         }
-        case 'tool-result': parts.push(...partsFor(block.content)); break;
         case 'reasoning': break;
         case 'tool-call': throw new LlmError('用户或工具结果中不能包含工具请求', 'UNSUPPORTED_CONTENT');
         default: throw new LlmError('第三方 DeepSeek 不支持该内容块', 'UNSUPPORTED_CONTENT');
@@ -108,15 +109,14 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
       if (message.content.some(b => b.type !== 'text')) throw new LlmError('系统消息仅支持文本', 'UNSUPPORTED_CONTENT');
       const text = message.content.map(b => b.type === 'text' ? b.text : '').join('');
       if (text) wire.push({ role: 'system', content: text });
+    } else if (message.role === 'tool') {
+      const output = partsFor(message.content);
+      wire.push({ role: 'tool', tool_call_id: message.toolCallId, content: textOf(output) || '(no output)' });
+      pendingImages.push(...output.filter(p => p.type === 'image_url'));
+    } else if (message.role === 'user') {
+      flush(); wire.push({ role: 'user', content: contentOf(partsFor(message.content)) });
     } else {
-      const results = message.content.filter(b => b.type === 'tool-result');
-      const parts = partsFor(message.content.filter(b => b.type !== 'tool-result'));
-      if (parts.length || !results.length) { flush(); wire.push({ role: 'user', content: contentOf(parts) }); }
-      for (const result of results) {
-        const output = partsFor(result.content);
-        wire.push({ role: 'tool', tool_call_id: result.toolCallId, content: textOf(output) || '(no output)' });
-        pendingImages.push(...output.filter(p => p.type === 'image_url'));
-      }
+      throw new LlmError('无法表示此开发者消息', 'UNSUPPORTED_CONTENT');
     }
   }
   flush();
@@ -127,10 +127,12 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
     max_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens,
     ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
     ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(options.tools?.length ? { tools: options.tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })) } : {}),
+    ...(projected.tools?.length ? { tools: projected.tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })) } : {}),
   };
 }
 
-export function imagePolicy(model: GatewayModel): { maxPixels: number; maxBytes: number } {
-  return { maxPixels: model.imagePixelBudget === 'low' ? 512 * 512 : model.imagePixelBudget ?? 640000, maxBytes: model.imageMaxBytes ?? 1024 * 1024 };
+export function imagePolicy(model: GatewayModel, ref: ImageAttachmentRef): { width: number; height: number; maxBytes: number } {
+  const pixels = model.imagePixelBudget === 'low' ? 512 * 512 : model.imagePixelBudget ?? 640000;
+  const scale = Math.min(1, Math.sqrt(pixels / (ref.width * ref.height)), 4096 / Math.max(ref.width, ref.height));
+  return { width: Math.max(1, Math.floor(ref.width * scale)), height: Math.max(1, Math.floor(ref.height * scale)), maxBytes: model.imageMaxBytes ?? 1024 * 1024 };
 }

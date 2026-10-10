@@ -2,15 +2,15 @@ import React, { useState, useSyncExternalStore } from 'react';
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client';
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client';
 import type { ProviderCardExtrasOwnerProps } from '@deepseek-ai/dsh-client-ui-settings-models/client';
 import { NS, type GatewayProfile } from '../shared.js';
 import { GatewayEditor } from './Editor.js';
 import type { ClientOperations } from './controller.js';
 
 interface Section { providers?: Record<string, GatewayProfile> }
-interface Injected { scope: SettingsScope<Section>; operations: ClientOperations; taken: () => readonly string[] }
-function useSnapshot(scope: SettingsScope<Section>) { return useSyncExternalStore(scope.subscribe.bind(scope), scope.getSnapshot.bind(scope), scope.getSnapshot.bind(scope)); }
+interface Injected { scope: ConfigForm<Section>; operations: ClientOperations; taken: () => readonly string[] }
+function useSnapshot(scope: ConfigForm<Section>) { return useSyncExternalStore(scope.subscribe.bind(scope), scope.getSnapshot.bind(scope), scope.getSnapshot.bind(scope)); }
 export function GatewayFooter({ scope, operations, taken }: Injected) {
   const state = useSnapshot(scope);
   const [open, setOpen] = useState<'custom' | 'senjix'>();
@@ -30,12 +30,10 @@ export function GatewayCard({ provider, scope, operations, taken }: Injected & P
   const route = provider.provider;
   const profile = state.value?.providers?.[route];
   if (!profile) return null;
-  const baseProviders = state.base as Section | undefined;
-  const fromBase = !!baseProviders?.providers?.[route];
+  const fromBase = !!(state.base as Section | undefined)?.providers?.[route];
   const remove = async () => {
     setBusy(true); setFailure('');
     try {
-      // Removing a composition-backed row would merely re-inherit it.
       await operations.write([{ op: 'unset', path: ['providers', route] }], state.revision!);
     } catch (error) { setFailure(error instanceof Error ? error.message : '删除失败'); }
     finally { setBusy(false); setConfirmDelete(false); }
@@ -48,9 +46,9 @@ export function GatewayCard({ provider, scope, operations, taken }: Injected & P
     {failure && <p role="alert" className="dsg-error">{failure}</p>}
   </div>;
 }
-export const inject = ['slots', 'settingsScope', 'remote', 'remote.settings', 'remote.credentials', 'remote.llm'];
+export const inject = ['slots', 'configForms', 'remote', 'remote.settings', 'remote.credentials', 'remote.llm'];
 export function apply(ctx: Context): void {
-  const scope = ctx.settingsScope.bind<Section>({ namespace: NS });
+  const scope = ctx.configForms.get<Section>(NS);
   let routes: readonly string[] = [];
   let active = true;
   const refresh = async () => {

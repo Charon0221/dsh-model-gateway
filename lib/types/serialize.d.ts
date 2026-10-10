@@ -1,4 +1,4 @@
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment';
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import { type GenerateOptions, type ImageAttachmentAccessResolver } from '@deepseek-ai/dsh-llm';
 import { type GatewayModel } from './shared.js';
 import type { ResolvedProfile } from './config.js';
@@ -31,7 +31,8 @@ export interface SerializationServices {
     resolveFilePath?: (hostPath: string) => string | undefined;
 }
 export declare function serializeRequest(options: GenerateOptions, profile: ResolvedProfile, services?: SerializationServices): Promise<Record<string, unknown>>;
-export declare function imagePolicy(model: GatewayModel): {
-    maxPixels: number;
+export declare function imagePolicy(model: GatewayModel, ref: ImageAttachmentRef): {
+    width: number;
+    height: number;
     maxBytes: number;
 };

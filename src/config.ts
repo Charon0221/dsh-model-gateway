@@ -20,7 +20,10 @@ export const ProfileSchema: z<GatewayProfile> = z.object({
   maxInlineRequestImageBytes: positiveInteger(), maxImagesPerRequest: positiveInteger(),
   retryPolicy: RetryPolicySchema,
 });
-export const Config: z<Config> = z.object({ providers: z.dict(ProfileSchema).default({}) });
+// Form schemas cross the Remote boundary: callbacks cannot be rehydrated there.
+// Semantic validation belongs to the Host internal/config hook before commit.
+export const Config = z.object({ providers: z.dict(ProfileSchema).default({}).volatile() }).default({});
+export type LiveConfig = ReturnType<typeof Config>;
 export interface ResolvedProfile extends Omit<GatewayProfile, 'apiKeyEnv' | 'retryPolicy'> {
   route: string;
   displayName: string;

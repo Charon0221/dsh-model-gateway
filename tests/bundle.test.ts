@@ -16,7 +16,7 @@ test('distributed client loads through harness module loader and disposes slots/
   const disposers: (() => void)[] = [];
   const registrations: any[] = [];
   const ctx = {
-    settingsScope: { bind: () => ({ getSnapshot: () => ({ value: {} }) }) },
+    configForms: { get: () => ({ getSnapshot: () => ({ value: {} }) }) },
     remote: { llm: { listProviders: async () => ({ ok: true, value: [] }) }, $on: () => () => {} },
     on: () => () => {},
     effect: (fn: () => () => void) => disposers.push(fn()),

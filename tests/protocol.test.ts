@@ -71,7 +71,7 @@ test('official effort fields and reasoning history survive tool round trips', as
 
 const ref = { attachmentId: 'image-one', mediaType: 'image/png', width: 20, height: 10, bytes: 3, name: 'shot.png', depth: 'uchar', space: 'srgb', hasAlpha: false } as unknown as ImageAttachmentRef;
 const attachments = { readImageRequest: async (image: ImageAttachmentRef) => ({ attachment: image, variantId: 'variant', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png', bytes: 3, width: 20, height: 10, depth: 'uchar', space: 'srgb', hasAlpha: false } as RequestImageAttachment) } as AttachmentStore;
-test('user and tool screenshots serialize inline; old images offload without mutating durable history', async () => {
+test('user and tool screenshots serialize inline; 0.2 durable offload requests oldest image removal', async () => {
   const image = createUserMessage({ content: [{ type: 'text', text: 'look' }, { type: 'image', attachment: ref }], source: { kind: 'user' } });
   const call = createAssistantMessage({ source: { provider: 'test', model: 'deepseek' }, content: [{ type: 'tool-call', id: ToolCallId('screenshot'), name: 'screen', arguments: '{}' }] });
   const result = createToolResultMessage({ callId: ToolCallId('screenshot'), content: [{ type: 'image', attachment: ref }], isError: false });
@@ -81,7 +81,10 @@ test('user and tool screenshots serialize inline; old images offload without mut
   assert.equal(msgs[0].content[2].image_url.url, 'data:image/png;base64,AQID');
   assert.equal(msgs[2].role, 'tool'); assert.equal(msgs[2].tool_call_id, 'screenshot');
   assert.equal(msgs[3].role, 'user'); assert.equal(msgs[3].content[1].type, 'image_url');
-  const small = await serializeRequest({ ...options(), messages: [image] }, profile({ models: p.models, maxInlineRequestImageBytes: 1 }), { attachments });
+  const limited = profile({ models: p.models, maxInlineRequestImageBytes: 1 });
+  await assert.rejects(serializeRequest({ ...options(), messages: [image] }, limited, { attachments }), e => e instanceof LlmError && e.code === 'IMAGE_OFFLOAD_REQUIRED' && e.failure.offloadImages === 1);
+  const offloaded = { ...image, content: image.content.map(block => block.type === 'image' ? { ...block, offloaded: true } : block) };
+  const small = await serializeRequest({ ...options(), messages: [offloaded] }, limited, { attachments });
   assert.equal(typeof (small.messages as any[])[0].content, 'string');
   assert.match((small.messages as any[])[0].content, /image-one/);
   assert.equal(image.content[1].type, 'image');

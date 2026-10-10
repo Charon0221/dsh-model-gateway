@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client';
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client';
 import type { ProviderCardExtrasOwnerProps } from '@deepseek-ai/dsh-client-ui-settings-models/client';
 import { type GatewayProfile } from '../shared.js';
 import type { ClientOperations } from './controller.js';
@@ -7,7 +7,7 @@ interface Section {
     providers?: Record<string, GatewayProfile>;
 }
 interface Injected {
-    scope: SettingsScope<Section>;
+    scope: ConfigForm<Section>;
     operations: ClientOperations;
     taken: () => readonly string[];
 }
