@@ -1,6 +1,6 @@
 # 验收记录
 
-当前插件版本：`0.4.1`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议，并支持网关原生搜索与 DSH `ctx.web` 搜索 provider。
+以下早期记录属于 0.4.1；0.5.0 验收记录见文末。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议，并支持网关原生搜索与 DSH `ctx.web` 搜索 provider。
 
 本地自动化验收覆盖：
 
@@ -52,3 +52,19 @@ npm run test:live
 - 用户随后手动请求抓取 `https://nodejs.org/en/download/current`。15:46:01 的轨迹截图显示单次 `web_fetch` 参数保留完整 URL，状态“已完成”，结果 `Fetched https://nodejs.org/en/download/current (HTTP 200)`，包含网页正文；随后助手根据工具结果回答 `Node.js — Download Node.js®`。未出现 `INVALID_ARGS`，真实抓取与工具结果续答通过。
 - 用户补充的 DeepSeek V4.1 Flash 桌面轨迹显示两次 `web_fetch` 均携带完整 URL，返回 HTTP 200，随后模型根据工具结果续答。该记录验证网页抓取与工具续答；这轮没有原生搜索执行证据，因此不声明已验证该模型的原生搜索。
 - 本机已验证深极云算 `gpt-6.1-sol` 原生搜索、来源显示，以及 GPT 和 DeepSeek V4.1 Flash 的完整抓取参数和工具结果续答。其他协议由模拟回归覆盖；未对其他上游或模型的原生搜索进行真实验收。
+
+## 0.5.0 能力目录与原生控件验收（2026-10-11）
+
+- 官方 API 文档已核对：DeepSeek pricing/vision/thinking/Responses；OpenAI 当前精确模型页和 reasoning/web-search；Anthropic overview/thinking/effort/web-search；xAI Grok 4.7 和 Responses 搜索。目录随版本维护，不运行网站抓取，不按名字前缀赋能。未能核实的旧型号和网关别名保持“未核实”。
+- `deepseek-flash` 及官方明示的旧别名支持图片、工具、1M/384K；`deepseek-v4.1-flash` 不在官方接受 ID 列表中，保持未核实。实测网关能力可作为手动覆盖证据，不能把它宣传为官网能力声明。
+- 40 项测试通过：新增精确型号/别名/未知默认关闭、协议限制、手动覆盖、关闭搜索保留 fetch、厂商参数映射、备份/revision/只读/重复迁移/中断恢复；真实 DSH atoms 的 Menu 键盘选择、恢复默认、保存冲突与桥接独立开关均验证。保留三协议搜索引用、工具完整参数、HTTP 工具续聊回归。类型检查与构建通过。
+- desktop profile 安装包及配置备份：`.plugin-manager/backups/20261011-capabilities-v050`。通过本地 Settings API + revision 完成模型字段写入，内部迁移标记与完整 patch 备份位于 `.plugin-manager/migrations`。迁移没有修改网关地址、密钥或模型 ID。
+- 实机发现 npm 自动安装 peer 会产生第二份 DSH runtime，让 ConfigEditor 丢失 root Include；已把此次新增 runtime peer 移到备份中，恢复使用桌面端共享 runtime。插件产物采用外部共享依赖。没有修改 DSH 核心。
+- 真实接口：沿用 desktop 的 `https://senjix.cloud/v1/responses` 和原凭据。官方 `deepseek-flash`、`gpt-6.1-sol`、`grok-4.7` 均返回 HTTP 503：当前“国模分组×0.3”无可用渠道。原生搜索请求已发送服务端 `web_search`，但上游拒绝，因此本次不能宣称 GPT/Grok 搜索成功；没有执行官方搜索。
+- 对 `deepseek-v4.1-flash` 做临时手动能力覆盖的接口探测（不改持久配置）：HTTP 200，工具调用 `lookup_secret` 参数完整为 `{"label":"alpha"}`；传回 `alpha=7319` 后续答包含 7319；64×64 红色 PNG 识别为“红色”。该网关别名的图片和工具当次可用，原生搜索仍没有官方依据。脱敏记录保存在忽略目录 `test-results/capability-live.json` 和 `capability-official-live.json`。
+- 桌面端重启并加载构建后，迁移标记已确认完成。用户按 Escape 中止了 Windows 自动化；已停止 UI 操作，原生组件视觉、真实页面发现/保存、浅深色与窄屏实机验收仍待用户手动完成，不能把 jsdom 的键盘测试当成这部分实机验收。
+- 本次仅推送现有 GitHub 仓库，不创建 tag 或远程 Release。
+
+最终安装构建 `index.js` 与仓库 SHA256 相同：`58D2824C6109380EC8630F4ECA3ABB8D7393B37CB178F2A99901113163F982A2`；`client.js` 相同：`BEA45B54D340F200B482BF00568A398353F423C8EB1BD2CE58E4055166C54E32`。单模型恢复默认已回归确认清除旧高级能力字段，并保留显示名和说明。最终桌面进程启动时间 2026-10-11 18:01:41；迁移标记完成。重启后未再次改写模型能力。
+
+待完成的手动验收：在“设置 → 模型”编辑深极云算，检查模型发现、展开能力设置、官方来源链接、单模型/批量恢复默认与保存；用键盘选择协议，并在浅色、深色和窄窗口检查布局。若要继续使用当前 `deepseek-v4.1-flash` 网关别名，请手动开启图片输入与工具调用，保存后开新会话上传红色图片并执行一次带完整 URL 的网页抓取。GPT/Grok 原生搜索需要当前分组恢复可用渠道后再验证实际搜索事件和来源；HTTP 503 不能视为通过。

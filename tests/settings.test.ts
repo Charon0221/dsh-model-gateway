@@ -47,7 +47,7 @@ test('real Cordis settings: dormant start, live add/edit/remove, invalid externa
   await settings.mutate(NS, [{ op: 'set', path: ['providers', 'gateway'], value: profile() }]);
   await tick();
   assert.equal(ctx.llm.listProviders()[0].id, 'gateway');
-  assert.equal((await ctx.llm.resolveModelInfo('gateway', 'deepseek')).reasoning?.efforts.length, 4);
+  assert.equal((await ctx.llm.resolveModelInfo('gateway', 'deepseek')).reasoning?.efforts.length, 1);
   assert.equal(ctx.llm.listConfigurableProviders()[0].settingsNs, NS);
   const before = settings.describe().find(d => d.ns === NS)!;
   await settings.mutate(NS, [{ op: 'set', path: ['providers', 'gateway', 'displayName'], value: 'changed' }], before.revision);
@@ -74,7 +74,7 @@ test('validation rejects invalid identities, capacities, URLs, headers and effor
     { ...profile(), baseURL: 'https://key:secret@example.com/v1' },
     { ...profile(), headers: { authorization: 'secret' } },
     { ...profile(), models: [{ id: 'a' }, { id: 'a' }] },
-    { ...profile(), maxTokens: 1.5 }, { ...profile(), reasoningEffort: 'medium' },
+    { ...profile(), maxTokens: 1.5 }, { ...profile(), reasoningEffort: 'invalid' },
   ]) assert.throws(() => resolveProfiles({ providers: { test: bad as any } }));
   const raw = profile(); const p = resolveProfiles({ providers: { test: raw } }).get('test')!;
   raw.models[0].id = 'mutated'; assert.equal(p.models[0].id, 'deepseek');

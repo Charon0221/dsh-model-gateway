@@ -15,6 +15,7 @@ import { Config, resolveProfiles, type ResolvedProfile, type LiveConfig } from '
 import { discoverModels } from './discovery.js';
 import { NS } from './shared.js';
 import { GatewayWebSearchProvider } from './web.js';
+import { migrateCapabilities } from './migration.js';
 
 export { Config, resolveProfiles, GatewayAdapter, discoverModels };
 export type { GatewayModel, GatewayProfile, Effort, NativeSearchMode } from './shared.js';
@@ -100,5 +101,10 @@ export function apply(ctx: Context, config: LiveConfig): void {
   ctx.on('loader/volatile-update', () => { current(); });
   ctx.inject(['settings'], settingsCtx => {
     settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber));
+    // ConfigEditor rejects writes while the owning Loader fiber is applying.
+    // Schedule after the entire tree settles; do not await this inside apply.
+    void ctx.root.loader.await().then(() => migrateCapabilities(settingsCtx.settings)).then(status => {
+      if (status === 'readonly') ctx.logger.warn('模型能力默认迁移待完成：当前配置只读');
+    }).catch(error => { ctx.logger.warn('模型能力默认迁移未完成，已保留当前配置和备份；下次启动重试 (%s)', error instanceof Error ? error.name : 'unknown'); });
   });
 }

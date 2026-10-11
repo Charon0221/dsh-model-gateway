@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkForUpdate, isNewerVersion, resetUpdateCache } from '../src/client/updates.js';
+import { checkForUpdate, isNewerVersion, resetUpdateCache, PLUGIN_VERSION } from '../src/client/updates.js';
 
 test('release versions compare without treating malformed tags as updates', () => {
   assert.equal(isNewerVersion('0.2.0', 'v0.2.1'), true);
@@ -18,7 +18,7 @@ test('release check returns an install spec and caches successful checks', async
   };
   const first = await checkForUpdate(fetchImpl, 1000);
   const second = await checkForUpdate(fetchImpl, 1001);
-  assert.deepEqual(first, { currentVersion: '0.4.1', latestVersion: '9.1.0', releaseUrl: 'https://github.com/example/release', installSpec: 'github:Charon0221/dsh-model-gateway#v9.1.0' });
+  assert.deepEqual(first, { currentVersion: PLUGIN_VERSION, latestVersion: '9.1.0', releaseUrl: 'https://github.com/example/release', installSpec: 'github:Charon0221/dsh-model-gateway#v9.1.0' });
   assert.deepEqual(second, first);
   assert.equal(calls, 1);
 });

@@ -24,10 +24,9 @@ export async function discoverModels(
     return list.flatMap((entry: Record<string, unknown>) => {
       if (!entry || typeof entry.id !== 'string' || !entry.id.trim() || seen.has(entry.id)) return [];
       seen.add(entry.id);
-      const official = officialModelDefaults(entry.id);
+      const official = officialModelDefaults(entry.id, p?.protocol ?? 'chat-completions');
       const enriched = enrichModel({ id: entry.id,
-        ...(official ? {} : { name: typeof entry.name === 'string' ? entry.name : undefined, contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) }) });
-      if (!official) delete enriched.inputModalities;
+        ...(official ? {} : { name: typeof entry.name === 'string' ? entry.name : undefined, contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) }) }, p?.protocol ?? 'chat-completions');
       return [enriched];
     });
   } catch (error) { throw idle.classify(error); }

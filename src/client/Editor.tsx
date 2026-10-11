@@ -1,132 +1,71 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Button, Input, Checkbox, Switch, Modal, Tag, IconPlusOutlineRegular, IconTrashOutlineRegular, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { CredentialInfo } from '@deepseek-ai/dsh-api-remotes/client';
 import { EFFORTS, NATIVE_SEARCH_MODES, PROTOCOLS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from '../shared.js';
-import { OFFICIAL_MODEL_CATALOG } from '../catalog.js';
+import { OFFICIAL_MODEL_CATALOG, enrichModel, modelDocumentation, nativeModeForProtocol, officialModelDefaults, restoreOfficialDefaults } from '../catalog.js';
 import { SaveTransaction, validateDraft, type ClientOperations } from './controller.js';
+import { Selection } from './controls.js';
 
-export interface EditorProps {
-  route?: string;
-  initial?: GatewayProfile;
-  preset?: boolean;
-  revision: number;
-  taken: readonly string[];
-  writable: boolean;
-  operations: ClientOperations;
-  onClose: () => void;
-}
+export interface EditorProps { route?: string; initial?: GatewayProfile; preset?: boolean; revision: number; taken: readonly string[]; writable: boolean; operations: ClientOperations; onClose: () => void }
+const effortName: Record<Effort,string> = { off:'关闭', low:'低', medium:'中', high:'高', xhigh:'更高', max:'最高' };
+const nativeName = { none:'关闭原生搜索', 'openai-chat':'Chat Completions 原生搜索', 'openai-responses':'Responses 原生搜索', 'anthropic-messages':'Anthropic 原生搜索' };
 export function GatewayEditor(props: EditorProps) {
   const creating = !props.route;
-  const initial: GatewayProfile = props.initial ?? (props.preset ? { displayName: SENJIX_PRESET.displayName, baseURL: SENJIX_PRESET.baseURL, apiKeyEnv: SENJIX_PRESET.apiKeyEnv, models: SENJIX_PRESET.models } : { baseURL: '', models: [] });
-  const [route, setRoute] = useState(props.route ?? (props.preset ? 'senjix' : ''));
-  const [draft, setDraft] = useState<GatewayProfile>({ ...initial, models: initial.models.map(m => ({ ...m })), protocol: initial.protocol ?? 'chat-completions', reasoningEffort: initial.reasoningEffort ?? 'high' });
-  const [key, setKey] = useState('');
-  const [credential, setCredential] = useState<CredentialInfo>();
-  const [busy, setBusy] = useState(false);
-  const [committed, setCommitted] = useState(false);
-  const [failure, setFailure] = useState('');
-  const [candidates, setCandidates] = useState<readonly GatewayModel[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [query, setQuery] = useState('');
-  const [confirmKeyRemoval, setConfirmKeyRemoval] = useState(false);
-  const transaction = useRef(new SaveTransaction(props.revision));
-  const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const keyRef = draft.apiKeyEnv ?? keyRefFor(route || 'gateway');
-  const profile: GatewayProfile = { ...draft, apiKeyEnv: keyRef };
-  const validation = validateDraft(route, profile, key, props.taken, creating && !committed);
-  const locked = busy || committed || !props.writable;
-  useEffect(() => {
-    let current = true;
-    setCredential(undefined);
-    props.operations.credential(keyRef).then(value => { if (current) setCredential(value); }).catch(() => {});
-    return () => { current = false; };
-  }, [keyRef, props.operations]);
-  const modelChange = (index: number, patch: Partial<GatewayModel>) => setDraft(p => ({ ...p, models: p.models.map((m, i) => i === index ? { ...m, ...patch } : m) }));
-  const toggleEffort = (index: number, effort: Effort, checked: boolean) => setDraft(p => ({ ...p, models: p.models.map((m, i) => {
-    if (i !== index) return m;
-    const efforts = new Set(m.reasoningEfforts ?? EFFORTS);
-    checked ? efforts.add(effort) : efforts.delete(effort);
-    const next = EFFORTS.filter(value => efforts.has(value));
-    return { ...m, reasoningEfforts: next.length ? next : ['off'], defaultReasoningEffort: next.includes(m.defaultReasoningEffort ?? 'high') ? m.defaultReasoningEffort : next[0] };
-  }) }));
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true); setFailure('');
-    try { await fn(); } catch (error) { if (mounted.current) setFailure(error instanceof Error ? error.message : '操作失败'); }
-    finally { if (mounted.current) setBusy(false); }
-  };
-  const save = () => run(async () => {
-    try {
-      await transaction.current.save(route, profile, key, props.operations, creating);
-      if (mounted.current) { setKey(''); props.onClose(); }
-    } finally { if (mounted.current) setCommitted(transaction.current.committed); }
-  });
-  const discover = () => run(async () => {
-    const result = await props.operations.discover({ provider: props.route, baseURL: draft.baseURL, ...(key.trim() ? { apiKey: key.trim() } : {}) });
-    if (mounted.current) { setCandidates(result); setSelected(new Set()); if (!result.length) setFailure('网关未公布模型，请手工添加'); }
-  });
-  const loadOfficialPresets = () => {
-    const existing = new Set(draft.models.map(model => model.id));
-    setCandidates(OFFICIAL_MODEL_CATALOG.filter(model => !existing.has(model.id)).map(model => ({ ...model, inputModalities: [...model.inputModalities], reasoningEfforts: [...model.reasoningEfforts] })));
-    setSelected(new Set());
-    setQuery('');
-    setFailure('');
-  };
-  const visible = candidates.filter(m => `${m.id} ${m.name ?? ''}`.toLowerCase().includes(query.toLowerCase()));
+  const initial: GatewayProfile = props.initial ?? (props.preset ? { displayName: SENJIX_PRESET.displayName, baseURL: SENJIX_PRESET.baseURL, apiKeyEnv: SENJIX_PRESET.apiKeyEnv, models: SENJIX_PRESET.models } : { baseURL:'',models:[] });
+  const [route,setRoute]=useState(props.route ?? (props.preset?'senjix':''));
+  const [draft,setDraft]=useState<GatewayProfile>(()=>({...initial, protocol:initial.protocol ?? 'chat-completions', models:initial.models.map(m=>enrichModel(m,initial.protocol ?? 'chat-completions'))}));
+  const [key,setKey]=useState(''); const [credential,setCredential]=useState<CredentialInfo>();
+  const [busy,setBusy]=useState(false); const [committed,setCommitted]=useState(false); const [failure,setFailure]=useState('');
+  const [candidates,setCandidates]=useState<readonly GatewayModel[]>([]); const [selected,setSelected]=useState<Set<string>>(new Set()); const [query,setQuery]=useState('');
+  const [expanded,setExpanded]=useState<Set<number>>(new Set()); const [confirmKeyRemoval,setConfirmKeyRemoval]=useState(false);
+  const transaction=useRef(new SaveTransaction(props.revision)); const mounted=useRef(true);
+  const editedIds=useRef(new Set<number>());
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const keyRef=draft.apiKeyEnv ?? keyRefFor(route||'gateway'); const profile={...draft,apiKeyEnv:keyRef};
+  const protocol=draft.protocol ?? 'chat-completions'; const validation=validateDraft(route,profile,key,props.taken,creating&&!committed); const locked=busy||committed||!props.writable;
+  useEffect(()=>{let current=true;setCredential(undefined);props.operations.credential(keyRef).then(v=>{if(current)setCredential(v);}).catch(()=>{});return()=>{current=false;};},[keyRef,props.operations]);
+  const modelChange=(index:number,patch:Partial<GatewayModel>)=>setDraft(p=>({...p,models:p.models.map((m,i)=>i===index?{...m,...patch}:m)}));
+  const modelReplace=(index:number,model:GatewayModel)=>setDraft(p=>({...p,models:p.models.map((m,i)=>i===index?model:m)}));
+  const run=async(fn:()=>Promise<void>)=>{setBusy(true);setFailure('');try{await fn();}catch(e){if(mounted.current)setFailure(e instanceof Error?e.message:'操作失败');}finally{if(mounted.current)setBusy(false);}};
+  const save=()=>run(async()=>{try{await transaction.current.save(route,profile,key,props.operations,creating);if(mounted.current){setKey('');props.onClose();}}finally{if(mounted.current)setCommitted(transaction.current.committed);}});
+  const discover=()=>run(async()=>{const result=await props.operations.discover({provider:props.route,baseURL:draft.baseURL,...(key.trim()?{apiKey:key.trim()}:{})});if(mounted.current){setCandidates(result);setSelected(new Set());if(!result.length)setFailure('网关未公布模型，请手工添加');}});
+  const visible=candidates.filter(m=> (m.id+' '+(m.name??'')).toLowerCase().includes(query.toLowerCase()));
+  const toggleEffort=(index:number,effort:Effort,checked:boolean)=>{const m=draft.models[index];const values=new Set(m.reasoningEfforts??['off']);checked?values.add(effort):values.delete(effort);const next=EFFORTS.filter(e=>values.has(e));modelChange(index,{reasoningEfforts:next.length?next:['off'],defaultReasoningEffort:next.includes(m.defaultReasoningEffort??'off')?m.defaultReasoningEffort:next[0]??'off'});};
+  const field=(label:string,value:string|number|undefined,onChange:(s:string)=>void,type='text',hint?:string)=><label className="dsg-field"><span>{label}</span><Input type={type} value={value??''} disabled={locked} onChange={e=>onChange(e.target.value)} placeholder={hint} autoComplete={type==='password'?'off':undefined}/></label>;
   return <div className="dsg-editor">
-    <header className="dsg-editor-header">
-      <div><h3 className="dsg-editor-title">{creating ? '添加模型网关' : '编辑网关'}</h3><span className="dsg-editor-route">{route || '新网关'}</span></div>
-    </header>
-    <div className="dsg-fields dsg-fields-primary">
-      <label className="dsg-field"><span>提供方 ID</span><input value={route} disabled={locked || !creating} onChange={e => setRoute(e.target.value)} placeholder="my-deepseek" /></label>
-      <label className="dsg-field"><span>显示名称</span><input value={draft.displayName ?? ''} disabled={locked} onChange={e => setDraft(p => ({ ...p, displayName: e.target.value || undefined }))} /></label>
-      <label className="dsg-field"><span>API 协议</span><select value={draft.protocol ?? 'chat-completions'} disabled={locked} onChange={e => setDraft(p => ({ ...p, protocol: e.target.value as GatewayProtocol }))}>{PROTOCOLS.map(protocol => <option key={protocol} value={protocol}>{protocol === 'chat-completions' ? 'OpenAI Chat Completions' : protocol === 'responses' ? 'OpenAI Responses' : 'Anthropic Messages'}</option>)}</select></label>
-      <label className="dsg-field dsg-field-wide"><span>Base URL</span><input value={draft.baseURL} disabled={locked} onChange={e => setDraft(p => ({ ...p, baseURL: e.target.value }))} placeholder="https://gateway.example/v1" /></label>
-      <label className="dsg-field"><span>凭据引用</span><input value={keyRef} disabled={locked} onChange={e => setDraft(p => ({ ...p, apiKeyEnv: e.target.value || undefined }))} /></label>
-      <label className="dsg-field"><span>API Key</span><input type="password" autoComplete="off" value={key} disabled={busy || !props.writable || credential?.writable === false} onChange={e => setKey(e.target.value)} placeholder={credential?.configured ? '已配置；留空保持当前密钥' : '填写密钥或通过环境变量配置'} /></label>
-      <label className="dsg-field"><span>默认推理强度</span><select value={draft.reasoningEffort ?? 'high'} disabled={locked} onChange={e => setDraft(p => ({ ...p, reasoningEffort: e.target.value as GatewayProfile['reasoningEffort'] }))}>{EFFORTS.map(e => <option key={e}>{e}</option>)}</select></label>
-    </div>
-    <p className="dsg-hint">推理和搜索参数按模型声明发送；未声明原生搜索的模型使用 DSH 通用网页搜索。凭据只写入 dsh 凭据存储。</p>
-    <div className="dsg-fields dsg-search-settings">
-      <label className="dsg-field"><span>DSH 网页搜索</span><select value={draft.webSearch?.enabled === false ? 'off' : 'on'} disabled={locked} onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, enabled: e.target.value === 'on' } }))}><option value="on">启用</option><option value="off">关闭</option></select></label>
-      <label className="dsg-field"><span>搜索模型覆盖</span><input value={draft.webSearch?.model ?? ''} disabled={locked} placeholder="留空使用首个可搜索模型" onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, model: e.target.value || undefined } }))} /></label>
-      <label className="dsg-field"><span>最大搜索次数</span><input type="number" min="1" step="1" value={draft.webSearch?.maxUses ?? ''} disabled={locked} placeholder="5" onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, maxUses: e.target.value ? Number(e.target.value) : undefined } }))} /></label>
-    </div>
-    {credential?.configured && credential.writable && <div className="dsg-inline-warning">
-      {confirmKeyRemoval ? <><span>删除凭据 {keyRef}？其他使用此引用的网关也会受到影响。</span><button className="dsg-button dsg-button-danger" type="button" disabled={busy || committed || !props.writable} onClick={() => run(async () => {
-        await props.operations.removeKey(keyRef);
-        if (mounted.current) { setCredential(await props.operations.credential(keyRef)); setKey(''); setConfirmKeyRemoval(false); }
-      })}>确认删除密钥</button><button className="dsg-button dsg-button-quiet" type="button" onClick={() => setConfirmKeyRemoval(false)}>取消</button></>
-        : <button className="dsg-button dsg-button-danger" type="button" disabled={locked} onClick={() => setConfirmKeyRemoval(true)}>删除已存密钥</button>}
-    </div>}
-    <div className="dsg-section-heading"><div><h4>模型能力</h4><p>显式声明模型支持的输入类型和容量。</p></div><div className="dsg-actions dsg-actions-compact">
-      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked} onClick={() => setDraft(p => ({ ...p, models: [...p.models, { id: '', inputModalities: ['text'] }] }))}>手工添加模型</button>
-      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked} onClick={loadOfficialPresets}>添加官方预设</button>
-      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked || !draft.baseURL.trim()} onClick={discover}>获取深极云算模型</button>
-    </div>
-    </div>
-    {candidates.length > 0 && <fieldset disabled={locked} className="dsg-discovery"><legend>选择模型</legend>
-      <div className="dsg-discovery-toolbar"><label className="dsg-field"><span>搜索模型</span><input value={query} onChange={e => setQuery(e.target.value)} /></label><div className="dsg-actions dsg-actions-compact"><button className="dsg-button dsg-button-quiet" type="button" onClick={() => setSelected(p => new Set([...p, ...visible.map(m => m.id)]))}>全选可见</button><button className="dsg-button dsg-button-quiet" type="button" onClick={() => setSelected(new Set())}>取消全选</button></div></div>
-      <div className="dsg-candidates">{visible.length ? visible.map(m => <label key={m.id}><input type="checkbox" checked={selected.has(m.id)} onChange={e => setSelected(p => { const next = new Set(p); e.target.checked ? next.add(m.id) : next.delete(m.id); return next; })} /><code>{m.id}</code><span className="dsg-candidate-meta">{m.name ?? '未知模型'} · {m.contextWindow ? `${m.contextWindow.toLocaleString()} 上下文` : '默认容量'} · {m.inputModalities?.includes('image') ? '图片' : '文本'}</span></label>) : <p className="dsg-empty">没有匹配的模型</p>}</div>
-      <button className="dsg-button dsg-button-primary" type="button" disabled={!selected.size} onClick={() => {
-        setDraft(p => ({ ...p, models: [...p.models, ...candidates.filter(m => selected.has(m.id) && !p.models.some(old => old.id === m.id)).map(m => ({ ...m }))] }));
-        setCandidates([]); setSelected(new Set());
-      }}>添加所选</button>
-    </fieldset>}
-    <div className="dsg-models">{draft.models.length ? draft.models.map((m, i) => <fieldset key={i} disabled={locked} className="dsg-model-card"><legend>模型 {i + 1}</legend>
-      <div className="dsg-fields dsg-model-fields">
-        <label className="dsg-field"><span>模型 ID</span><input value={m.id} onChange={e => modelChange(i, { id: e.target.value })} /></label>
-        <label className="dsg-field"><span>模型显示名</span><input value={m.name ?? ''} onChange={e => modelChange(i, { name: e.target.value || undefined })} /></label>
-        <label className="dsg-field"><span>上下文容量</span><input type="number" min="1" step="1" value={m.contextWindow ?? ''} placeholder="262144（回退值）" onChange={e => modelChange(i, { contextWindow: e.target.value ? Number(e.target.value) : undefined })} /></label>
-        <label className="dsg-field"><span>输出上限</span><input type="number" min="1" step="1" value={m.maxTokens ?? ''} placeholder="32768（回退值）" onChange={e => modelChange(i, { maxTokens: e.target.value ? Number(e.target.value) : undefined })} /></label>
-      </div>
-      <label className="dsg-checkbox"><input type="checkbox" checked={m.inputModalities?.includes('image') ?? false} onChange={e => modelChange(i, { inputModalities: e.target.checked ? ['text', 'image'] : ['text'] })} />支持图片输入</label>
-      <div className="dsg-model-options"><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsTools !== false} onChange={e => modelChange(i, { supportsTools: e.target.checked })} />支持工具调用</label><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsWebSearch !== false} onChange={e => modelChange(i, { supportsWebSearch: e.target.checked })} />允许网页搜索工具</label><label className="dsg-field dsg-field-inline"><span>默认 temperature</span><input type="number" min="0" max="2" step="0.1" value={m.defaultTemperature ?? ''} placeholder="按官方默认" onChange={e => modelChange(i, { defaultTemperature: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
-      <div className="dsg-model-options"><label className="dsg-field dsg-field-inline"><span>原生搜索</span><select value={m.nativeSearch ?? 'none'} onChange={e => modelChange(i, { nativeSearch: e.target.value as GatewayModel['nativeSearch'] })}>{NATIVE_SEARCH_MODES.map(mode => <option key={mode} value={mode}>{mode === 'none' ? '关闭（使用通用搜索）' : mode === 'openai-chat' ? 'OpenAI Chat Completions' : mode === 'openai-responses' ? 'OpenAI Responses' : 'Anthropic Messages'}</option>)}</select></label><label className="dsg-field dsg-field-inline"><span>最大搜索次数</span><input type="number" min="1" step="1" value={m.nativeSearchMaxUses ?? ''} placeholder="5" onChange={e => modelChange(i, { nativeSearchMaxUses: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
-      <div className="dsg-efforts"><span className="dsg-field-label">支持的推理档位</span>{EFFORTS.map(effort => <label key={effort} className="dsg-checkbox"><input type="checkbox" checked={(m.reasoningEfforts ?? EFFORTS).includes(effort)} onChange={e => toggleEffort(i, effort, e.target.checked)} />{effort}</label>)}<label className="dsg-field dsg-field-inline"><span>默认档位</span><select value={m.defaultReasoningEffort ?? 'high'} onChange={e => modelChange(i, { defaultReasoningEffort: e.target.value as Effort })}>{(m.reasoningEfforts ?? EFFORTS).map(effort => <option key={effort}>{effort}</option>)}</select></label></div>
-      <button className="dsg-button dsg-button-danger dsg-button-small" type="button" onClick={() => setDraft(p => ({ ...p, models: p.models.filter((_, index) => index !== i) }))}>移除模型</button>
-    </fieldset>) : <p className="dsg-empty dsg-empty-models">还没有模型，请手工添加或获取网关模型列表。</p>}</div>
-    {committed && <p className="dsg-success" role="status">网关配置已保存，请重试密钥保存；配置字段已锁定。</p>}
-    {(failure || validation) && <p className="dsg-error" role="alert">{failure || validation}</p>}
-    <div className="dsg-actions dsg-editor-actions"><button className="dsg-button dsg-button-primary" type="button" disabled={busy || !props.writable || !!validation} onClick={save}>{busy ? '处理中…' : committed ? '重试密钥保存' : '保存'}</button><button className="dsg-button dsg-button-secondary" type="button" disabled={busy} onClick={props.onClose}>关闭</button></div>
+    <header className="dsg-section-heading"><h3>{creating?'添加模型网关':'编辑网关'}</h3><Tag>{route||'新网关'}</Tag></header>
+    {!props.writable&&<p role="status" className="dsg-hint">当前配置只读；尚未完成的能力默认迁移需等待配置可写，手动修改也需在可写配置中保存。</p>}
+    <section aria-label="连接与凭据" className="dsg-group"><h4>连接与凭据</h4><div className="dsg-fields">
+      <label className="dsg-field"><span>提供方 ID</span><Input value={route} disabled={locked||!creating} onChange={e=>setRoute(e.target.value)} placeholder="my-gateway"/></label>
+      {field('显示名称',draft.displayName,s=>setDraft(p=>({...p,displayName:s||undefined})))}
+      <Selection label="API 协议" value={protocol} disabled={locked} options={PROTOCOLS.map(value=>({value,label:value==='responses'?'OpenAI Responses':value==='anthropic-messages'?'Anthropic Messages':'OpenAI Chat Completions'}))} onChange={s=>setDraft(p=>({...p,protocol:s as GatewayProtocol}))}/>
+      {field('Base URL',draft.baseURL,s=>setDraft(p=>({...p,baseURL:s})), 'url','https://gateway.example/v1')}
+      {field('凭据引用',keyRef,s=>setDraft(p=>({...p,apiKeyEnv:s||undefined})))}
+      <label className="dsg-field"><span>API Key</span><Input type="password" autoComplete="off" value={key} disabled={busy||!props.writable||credential?.writable===false} onChange={e=>setKey(e.target.value)} placeholder={credential?.configured?'已配置；留空保留密钥':'填写 API Key'}/></label>
+    </div><p className="dsg-hint">能力以厂商 API 文档为准，网关实际支持可能不同。凭据保存在 DSH 凭据存储中。</p>
+    {credential?.configured&&credential.writable&&<Button variant="ghost" size="sm" disabled={locked} icon={<IconTrashOutlineRegular/>} onClick={()=>setConfirmKeyRemoval(true)}>删除已存密钥</Button>}
+    </section>
+    <section aria-label="模型" className="dsg-group"><div className="dsg-section-heading"><div><h4>模型</h4><p className="dsg-hint">官方支持默认开启，不支持或未核实默认关闭。手动设置可以覆盖默认值。</p></div><Tag>{String(draft.models.length)+' 个模型'}</Tag></div>
+    <div className="dsg-actions"><Button variant="outline" disabled={locked} icon={<IconPlusOutlineRegular/>} onClick={()=>setDraft(p=>({...p,models:[...p.models,enrichModel({id:''},protocol)]}))}>手工添加模型</Button><Button variant="outline" disabled={locked} onClick={()=>{setCandidates(OFFICIAL_MODEL_CATALOG.filter(m=>!draft.models.some(old=>old.id===m.id)).map(m=>restoreOfficialDefaults(m,protocol)));setSelected(new Set());setQuery('');}}>添加官方预设</Button><Button variant="outline" disabled={locked||!draft.baseURL.trim()} onClick={discover}>获取网关模型</Button><Button variant="ghost" size="sm" disabled={locked} onClick={()=>setDraft(p=>({...p,models:p.models.map(m=>restoreOfficialDefaults(m,protocol))}))}>全部恢复官方默认</Button></div>
+    {candidates.length>0&&<div className="dsg-discovery"><div className="dsg-actions">{field('搜索模型',query,setQuery)}<Button size="sm" disabled={locked} onClick={()=>setSelected(p=>new Set([...p,...visible.map(m=>m.id)]))}>全选可见</Button><Button size="sm" disabled={locked} onClick={()=>setSelected(new Set())}>取消全选</Button></div><div className="dsg-candidates">{visible.map(m=><div key={m.id} className="dsg-candidate"><Checkbox label={m.id} checked={selected.has(m.id)} disabled={locked} onChange={checked=>setSelected(p=>{const next=new Set(p);checked?next.add(m.id):next.delete(m.id);return next;})}/><span className="dsg-hint">{m.name??'未核实模型'}</span></div>)}</div><Button variant="primary" disabled={locked||!selected.size} onClick={()=>{setDraft(p=>({...p,models:[...p.models,...candidates.filter(m=>selected.has(m.id)&&!p.models.some(old=>old.id===m.id)).map(m=>restoreOfficialDefaults(m,protocol))]}));setCandidates([]);setSelected(new Set());}}>添加所选</Button></div>}
+    <div className="dsg-models">{draft.models.map((m,i)=>{
+      const doc=modelDocumentation(m.id);const official=officialModelDefaults(m.id,protocol);const status=(key:'image'|'tools'|'reasoning'|'nativeSearch')=>!doc||doc[key]==='unverified'?'未核实':doc[key]==='unsupported'?'不支持':key==='tools'&&official?.supportsTools===false||key==='nativeSearch'&&official?.nativeSearch==='none'?'当前协议不支持':'官方支持';
+      return <div key={i} className="dsg-model-card"><div className="dsg-section-heading"><div><strong>{m.name||m.id||'新模型'}</strong><div className="dsg-actions"><Tag>{m.inputModalities?.includes('image')?'图片':'文本'}</Tag><Tag>{m.supportsTools?'工具调用':'工具关闭'}</Tag><Tag>{m.nativeSearch&&m.nativeSearch!=='none'?'原生搜索':'原生搜索关闭'}</Tag></div></div><Button size="sm" icon={<IconChevronDownOutlineRegular/>} aria-expanded={expanded.has(i)} aria-controls={'dsg-model-'+i} onClick={()=>setExpanded(p=>{const next=new Set(p);next.has(i)?next.delete(i):next.add(i);return next;})}>{expanded.has(i)?'收起能力设置':'展开能力设置'}</Button></div>
+      <div className="dsg-fields"><label className="dsg-field"><span>模型 ID</span><Input value={m.id} disabled={locked} onChange={e=>{editedIds.current.add(i);modelChange(i,{id:e.target.value});}} onBlur={()=>{if(editedIds.current.delete(i))modelReplace(i,restoreOfficialDefaults(m,protocol));}}/></label>{field('模型显示名',m.name,s=>modelChange(i,{name:s||undefined}))}</div>
+      <div id={'dsg-model-'+i} hidden={!expanded.has(i)} className="dsg-model-detail"><div className="dsg-fields">{field('上下文容量',m.contextWindow,s=>modelChange(i,{contextWindow:s?Number(s):undefined}),'number','未核实，使用网关回退容量')}{field('输出上限',m.maxTokens,s=>modelChange(i,{maxTokens:s?Number(s):undefined}),'number','未核实，使用网关回退容量')}</div>
+      <div className="dsg-capability"><Checkbox label="支持图片输入" checked={m.inputModalities?.includes('image')??false} disabled={locked} onChange={checked=>modelChange(i,{inputModalities:checked?['text','image']:['text']})}/><Tag>{status('image')}</Tag></div>
+      <div className="dsg-capability"><Checkbox label="支持工具调用" checked={m.supportsTools===true} disabled={locked} onChange={checked=>modelChange(i,{supportsTools:checked})}/><Tag>{status('tools')}</Tag></div>
+      <Checkbox label="允许网页搜索工具" checked={m.supportsWebSearch===true} disabled={locked} onChange={checked=>modelChange(i,{supportsWebSearch:checked})}/>
+      <div className="dsg-fields"><Selection label="模型原生搜索" value={m.nativeSearch??'none'} disabled={locked} options={NATIVE_SEARCH_MODES.map(value=>({value,label:nativeName[value],disabled:value!=='none'&&nativeModeForProtocol(value,protocol)==='none'}))} onChange={s=>modelChange(i,{nativeSearch:s as GatewayModel['nativeSearch']})}/>{field('原生搜索最大次数',m.nativeSearchMaxUses,s=>modelChange(i,{nativeSearchMaxUses:s?Number(s):undefined}),'number','5')}</div><Tag>{status('nativeSearch')}</Tag>
+      <div className="dsg-efforts"><span>支持的推理档位 · {status('reasoning')}</span>{EFFORTS.map(e=><Checkbox key={e} label={effortName[e]+' ('+e+')'} checked={(m.reasoningEfforts??['off']).includes(e)} disabled={locked} onChange={checked=>toggleEffort(i,e,checked)}/>)}</div>
+      <div className="dsg-fields"><Selection label="默认推理档位" value={m.defaultReasoningEffort??'off'} disabled={locked} options={(m.reasoningEfforts??['off']).map(value=>({value,label:effortName[value]}))} onChange={s=>modelChange(i,{defaultReasoningEffort:s as Effort})}/>{field('默认 temperature',m.defaultTemperature,s=>modelChange(i,{defaultTemperature:s?Number(s):undefined}),'number','按官方参数限制发送')}</div>
+      <p className="dsg-hint">{doc?'核对日期：'+doc.checkedAt:'该型号尚未匹配官方文档；可选能力默认关闭。'} {doc?.sources.map((url,n)=><React.Fragment key={url}><a href={url} target="_blank" rel="noreferrer">{'官方来源 '+(n+1)}</a>{' '}</React.Fragment>)}</p>
+      <Button variant="ghost" size="sm" disabled={locked} onClick={()=>modelReplace(i,restoreOfficialDefaults(m,protocol))}>恢复官方默认</Button></div>
+      <Button variant="ghost" size="sm" disabled={locked} icon={<IconTrashOutlineRegular/>} onClick={()=>{setDraft(p=>({...p,models:p.models.filter((_,index)=>index!==i)}));setExpanded(new Set());}}>移除模型</Button></div>;
+    })}</div>{!draft.models.length&&<p className="dsg-hint">还没有模型，请手工添加或获取模型列表。</p>}</section>
+    <section aria-label="搜索桥接" className="dsg-group"><h4>DSH 通用搜索网关桥接</h4><div className="dsg-capability"><Switch label="启用网关搜索桥接" checked={draft.webSearch?.enabled!==false} disabled={locked} onChange={checked=>setDraft(p=>({...p,webSearch:{...p.webSearch,enabled:checked}}))}/><span>作为 DSH 通用搜索提供方</span></div><p className="dsg-hint">桥接关闭不影响模型原生搜索。桥接只能使用已启用原生搜索的模型；DSH 官方通用搜索配置独立保留。</p><div className="dsg-fields">{field('桥接搜索模型',draft.webSearch?.model,s=>setDraft(p=>({...p,webSearch:{...p.webSearch,model:s||undefined}})), 'text','首个启用原生搜索的模型')}{field('桥接最大搜索次数',draft.webSearch?.maxUses,s=>setDraft(p=>({...p,webSearch:{...p.webSearch,maxUses:s?Number(s):undefined}})),'number','5')}</div></section>
+    {committed&&<p className="dsg-success" role="status">配置已保存，只重试凭据保存。</p>}{(failure||validation)&&<p className="dsg-error" role="alert">{failure||validation}</p>}
+    <div className="dsg-actions dsg-editor-actions"><Button variant="primary" disabled={busy||!props.writable||!!validation} onClick={save}>{busy?'处理中…':committed?'重试密钥保存':'保存'}</Button><Button variant="outline" disabled={busy} onClick={props.onClose}>关闭</Button></div>
+    <Modal open={confirmKeyRemoval} title="删除已存密钥" description={'删除凭据 '+keyRef+' 会影响其他使用该引用的网关。'} closeLabel="关闭确认" onClose={()=>{if(!busy)setConfirmKeyRemoval(false);}} footer={<><Button variant="outline" disabled={busy} onClick={()=>setConfirmKeyRemoval(false)}>取消</Button><Button variant="primary" disabled={locked} onClick={()=>run(async()=>{await props.operations.removeKey(keyRef);if(mounted.current){setCredential(await props.operations.credential(keyRef));setKey('');setConfirmKeyRemoval(false);}})}>确认删除密钥</Button></>}/>
   </div>;
 }

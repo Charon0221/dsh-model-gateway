@@ -1,7 +1,7 @@
 /** Opt-in, small paid API probes. Never persist or print the credential. */
 import { GatewayAdapter } from '../src/adapter.js';
 import { resolveProfiles } from '../src/config.js';
-import { EFFORTS, SENJIX_PRESET } from '../src/shared.js';
+import { SENJIX_PRESET } from '../src/shared.js';
 import { createUserMessage, createAssistantMessage, createToolResultMessage, ReasoningEffortId, type StreamChunk, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment';
 const key = process.env.SENJIX_API_KEY;
@@ -28,7 +28,7 @@ async function attempt(label: string, options: any, services = {}) {
     return [];
   }
 }
-for (const effort of EFFORTS) await attempt(`effort-${effort}`, { messages: [user('计算 17×19，只输出数字。')], reasoningEffort: ReasoningEffortId(effort) });
+for (const effort of profiles.get('senjix')!.models[0].reasoningEfforts ?? ['off']) await attempt(`effort-${effort}`, { messages: [user('计算 17×19，只输出数字。')], reasoningEffort: ReasoningEffortId(effort) });
 const first = await attempt('native-tools', { messages: [user('请调用 lookup_secret 工具查找 alpha 的值，然后告诉我结果。值只能从工具获得。')], reasoningEffort: ReasoningEffortId('high'), tools: [{ name: 'lookup_secret', description: 'Return secret value for a given label', parameters: { type: 'object', properties: { label: { type: 'string' } }, required: ['label'] } }] });
 const calls = first.filter(b => b.type === 'tool-call');
 if (calls.length) {

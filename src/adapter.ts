@@ -34,7 +34,7 @@ export class GatewayAdapter extends LlmAdapter {
       context: { contextWindow: m?.contextWindow ?? p.defaultContextWindow },
       defaultMaxTokens: m?.maxTokens ?? p.maxTokens,
       reasoning: {
-        efforts: (m?.reasoningEfforts ?? EFFORTS).map(id => ({ id: ReasoningEffortId(id), name: ({ off: '关闭', low: '低', high: '高', max: '最高' })[id], description: '发送兼容网关推理参数，实际效果由上游决定' })),
+        efforts: (m?.reasoningEfforts ?? ['off' as Effort]).map(id => ({ id: ReasoningEffortId(id), name: ({ off: '关闭', low: '低', medium: '中', high: '高', xhigh: '更高', max: '最高' })[id], description: '按模型与协议发送推理参数' })),
         defaultEffort: ReasoningEffortId(m?.defaultReasoningEffort ?? p.reasoningEffort),
       },
     };

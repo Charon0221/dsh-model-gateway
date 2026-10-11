@@ -72,7 +72,7 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
       if (m.imagePixelBudget !== undefined && m.imagePixelBudget !== 'low') number(m.imagePixelBudget, 1, `${route}/${m.id}.imagePixelBudget`);
       const input = m.inputModalities?.length ? m.inputModalities : undefined;
       if (input && (!input.includes('text') || input.some(v => v !== 'text' && v !== 'image'))) throw new LlmError(`${route}/${m.id}: 输入类型须包含 text，图片能力使用 image`, 'INVALID_CONFIG');
-      const enriched = enrichModel({ ...m, ...(input ? { inputModalities: [...input] } : {}) });
+      const enriched = enrichModel({ ...m, ...(input ? { inputModalities: [...input] } : {}) }, raw.protocol ?? 'chat-completions');
       const efforts = enriched.reasoningEfforts ?? [...EFFORTS];
       if (!efforts.length || efforts.some(e => !EFFORTS.includes(e))) throw new LlmError(`${route}/${m.id}: 推理档位无效`, 'INVALID_CONFIG');
       if (!efforts.includes(enriched.defaultReasoningEffort ?? 'high')) throw new LlmError(`${route}/${m.id}: 默认推理档位不在支持列表中`, 'INVALID_CONFIG');

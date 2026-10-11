@@ -12,7 +12,7 @@ import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from
 
 const input = () => createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } });
 const options = (): GenerateOptions => ({ provider: 'test', model: 'deepseek', messages: [input()] });
-const profile = (extra = {}) => resolveProfiles({ providers: { test: { baseURL: 'http://localhost/v1', models: [{ id: 'deepseek' }], ...extra } } }).get('test')!;
+const profile = (extra = {}) => resolveProfiles({ providers: { test: { baseURL: 'http://localhost/v1', models: [{ id: 'deepseek', providerFamily: 'deepseek', supportsTools: true, reasoningEfforts: ['off', 'low', 'high', 'max'], defaultReasoningEffort: 'high' }], ...extra } } }).get('test')!;
 const payload = (delta: object, finish: string | null = null) => JSON.stringify({ choices: [{ index: 0, delta, finish_reason: finish }] });
 async function* strings(items: string[]) { yield* items; }
 async function collect<T>(items: AsyncIterable<T>) { const all: T[] = []; for await (const item of items) all.push(item); return all; }
@@ -103,10 +103,10 @@ test('native search replaces only the DSH web_search tool for each protocol', as
   const responses = await serializeRequest({ ...options(), model: 'gpt-4.1', tools: [web, fn] }, profile({ protocol: 'responses', models: [{ id: 'gpt-4.1' }] }));
   assert.deepEqual((responses.tools as any[]).map(tool => tool.type), ['function', 'web_search']);
   assert.equal((responses.tools as any[]).some(tool => tool.name === 'web_search'), false);
-  const anthropic = await serializeRequest({ ...options(), model: 'claude-sonnet-4-20250514', tools: [web, fn] }, profile({ protocol: 'anthropic-messages', models: [{ id: 'claude-sonnet-4-20250514' }] }));
+  const anthropic = await serializeRequest({ ...options(), model: 'claude-sonnet-4-20250514', tools: [web, fn] }, profile({ protocol: 'anthropic-messages', models: [{ id: 'claude-sonnet-4-20250514', supportsTools: true, supportsWebSearch: true, nativeSearch: 'anthropic-messages' }] }));
   assert.equal((anthropic.tools as any[]).some(tool => tool.type === 'web_search_20250305'), true);
   assert.equal((anthropic.tools as any[]).some(tool => tool.name === 'web_search' && tool.input_schema), false);
-  const chat = await serializeRequest({ ...options(), model: 'grok-4', tools: [web, fn] }, profile({ models: [{ id: 'grok-4' }] }));
+  const chat = await serializeRequest({ ...options(), model: 'grok-4', tools: [web, fn] }, profile({ models: [{ id: 'grok-4', supportsTools: true, supportsWebSearch: true, nativeSearch: 'openai-chat' }] }));
   assert.ok(chat.web_search_options);
   assert.equal((chat.tools as any[])[0].function.name, 'lookup');
 });

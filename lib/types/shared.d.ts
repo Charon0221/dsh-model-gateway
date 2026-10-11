@@ -1,6 +1,6 @@
 /** Shared JSON-only configuration vocabulary; safe to import in the browser. */
 export declare const NS = "llm-deepseek-gateway";
-export declare const EFFORTS: readonly ["off", "low", "high", "max"];
+export declare const EFFORTS: readonly ["off", "low", "medium", "high", "xhigh", "max"];
 export type Effort = typeof EFFORTS[number];
 export declare const PROTOCOLS: readonly ["chat-completions", "responses", "anthropic-messages"];
 export type GatewayProtocol = typeof PROTOCOLS[number];
@@ -16,7 +16,6 @@ export declare const SENJIX_PRESET: {
     models: {
         id: string;
         name: string;
-        inputModalities: ModelModality[];
     }[];
 };
 export declare function keyRefFor(route: string): string;

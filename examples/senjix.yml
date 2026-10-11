@@ -6,14 +6,13 @@ llm-deepseek-gateway:
       protocol: chat-completions
       apiKeyEnv: SENJIX_API_KEY
       models:
-        - id: deepseek-v4.1-flash
+        - id: deepseek-flash
           name: DeepSeek V4.1 Flash
-          inputModalities: [text]
+          inputModalities: [text, image]
           nativeSearch: none
           supportsWebSearch: true
       reasoningEffort: high
       webSearch:
-        enabled: true
-        allowGenericFallback: true
+        enabled: false
         maxUses: 5
         timeoutMs: 30000

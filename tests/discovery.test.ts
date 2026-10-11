@@ -26,7 +26,7 @@ test('model discovery uses route headers and credentials, deduplicates candidate
   assert.deepEqual(candidates[0].inputModalities, ['text', 'image']);
   assert.equal(candidates[0].contextWindow, 1047576);
   assert.equal(candidates[0].maxTokens, 32768);
-  assert.equal('inputModalities' in candidates[1], false);
+  assert.deepEqual(candidates[1].inputModalities, ['text']); assert.equal(candidates[1].supportsTools, false);
   await assert.rejects(discoverModels({ baseURL: `${baseURL}/bad`, apiKey: 'draft-key' }, profiles, async () => 'unused'), e => e instanceof LlmError && e.code === 'MALFORMED_RESPONSE');
   const cancel = new AbortController(); cancel.abort();
   await assert.rejects(discoverModels({ provider: 'gateway' }, profiles, async () => 'key', cancel.signal), e => e instanceof LlmError && e.code === 'ABORTED');

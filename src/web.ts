@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchRequest, WebSearchResult } from '@deep
 import type { ResolvedProfile } from './config.js';
 import { errorCode, redactDiagnostic, requestHeaders } from './http.js';
 import { SearchSources } from './search-results.js';
+import { nativeModeForProtocol } from './catalog.js';
 
 export const MODEL_GATEWAY_WEB_PROVIDER = 'model-gateway-web';
 
@@ -37,7 +38,7 @@ export class GatewayWebSearchProvider implements WebSearchProvider {
   readonly id = MODEL_GATEWAY_WEB_PROVIDER;
   constructor(private readonly profiles: () => ReadonlyMap<string, ResolvedProfile>, private readonly resolveApiKey: (profile: ResolvedProfile) => Promise<string>, private readonly currentProvider: () => string | undefined, private readonly fetchImpl: typeof fetch = fetch) {}
   available(): boolean {
-    for (const profile of this.profiles().values()) if (profile.webSearch.enabled && profile.models.length) return true;
+    for (const profile of this.profiles().values()) if (profile.webSearch.enabled && profile.models.some(m => m.supportsWebSearch && nativeModeForProtocol(m.nativeSearch, profile.protocol ?? 'chat-completions') !== 'none')) return true;
     return false;
   }
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
@@ -46,12 +47,16 @@ export class GatewayWebSearchProvider implements WebSearchProvider {
     const route = this.currentProvider();
     const profile = (route ? profiles.get(route) : undefined) ?? profiles.values().next().value;
     if (!profile || !profile.webSearch.enabled) throw new LlmError('没有可用的模型网关网页搜索配置', 'WEB_PROVIDER_UNAVAILABLE');
-    const model = profile.webSearch.model ?? profile.models.find(entry => entry.nativeSearch && entry.nativeSearch !== 'none')?.id ?? profile.models[0].id;
+    const model = profile.webSearch.model ?? profile.models.find(entry => entry.supportsWebSearch && entry.nativeSearch && entry.nativeSearch !== 'none')?.id;
+    if (!model) throw new LlmError('网关桥接没有已启用原生搜索的模型', 'WEB_PROVIDER_UNAVAILABLE');
+    const configured = profile.models.find(entry => entry.id === model);
+    const native = configured?.nativeSearch;
+    if (!native || native === 'none') throw new LlmError('当前模型未配置原生搜索，不会推测搜索能力或切换提供方', 'WEB_PROVIDER_UNAVAILABLE');
+    const protocol = profile.protocol ?? 'chat-completions';
+    if (nativeModeForProtocol(native, protocol) === 'none') throw new LlmError('桥接模型的原生搜索与网关协议不匹配，不会切换协议', 'NATIVE_SEARCH_PROTOCOL_MISMATCH');
+    if (configured?.supportsWebSearch === false) throw new LlmError('桥接模型已关闭网页搜索', 'WEB_PROVIDER_UNAVAILABLE');
     const key = await this.resolveApiKey(profile);
     if (signal?.aborted) throw new LlmError('网页搜索已取消', 'WEB_ABORTED');
-    const native = profile.models.find(entry => entry.id === model)?.nativeSearch;
-    if ((!native || native === 'none') && !profile.webSearch.allowGenericFallback) throw new LlmError('当前模型未配置原生搜索，且网关已关闭通用搜索回退', 'WEB_PROVIDER_UNAVAILABLE');
-    const protocol = native === 'anthropic-messages' ? 'anthropic-messages' : native === 'openai-responses' ? 'responses' : native === 'openai-chat' ? 'chat-completions' : profile.protocol ?? 'chat-completions';
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), profile.webSearch.timeoutMs);
     const abort = () => controller.abort();

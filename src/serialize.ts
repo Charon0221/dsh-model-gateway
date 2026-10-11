@@ -3,6 +3,7 @@ import * as DshLlm from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver } from '@deepseek-ai/dsh-llm';
 import { EFFORTS, type GatewayModel, type GatewayProtocol, type NativeSearchMode } from './shared.js';
 import type { ResolvedProfile } from './config.js';
+import { modelDocumentation } from './catalog.js';
 
 const { LlmError, contentHasImage, projectImagesForTextModel, offloadedImageText, requestImageHandleText, fileHandleText } = DshLlm;
 const projectOffloadedImages = DshLlm.projectOffloadedImages ?? ((messages: any[], placeholder: (ref: any) => string) => messages.map(message => ({ ...message, content: message.content.map((block: any) => block.type === 'image' && block.offloaded ? { type: 'text', text: placeholder(block.attachment) } : block) })));
@@ -33,6 +34,40 @@ function nativeSearchFor(model: GatewayModel | undefined, protocol: GatewayProto
 
 function splitSearchTool(tools: ToolSchemaWire[] | undefined, native: NativeSearchMode | undefined) {
   return native ? { tools: tools?.filter(tool => tool.name !== 'web_search'), hasNative: true } : { tools, hasNative: false };
+}
+
+function reasoningParameters(model: GatewayModel | undefined, protocol: GatewayProtocol, effort: string, maxTokens: number): Record<string, unknown> {
+  const doc = model && modelDocumentation(model.id);
+  if (model?.reasoningEfforts?.every(e => e === 'off')) return {};
+  const style = doc?.reasoningStyle !== 'none' ? doc?.reasoningStyle : undefined;
+  const family = style ?? model?.providerFamily;
+  if (family === 'deepseek') {
+    if (protocol === 'responses') return { reasoning: { effort: effort === 'off' ? 'none' : effort } };
+    if (protocol === 'anthropic-messages') return { thinking: { type: effort === 'off' ? 'disabled' : 'enabled' }, ...(effort === 'off' ? {} : { output_config: { effort } }) };
+    return { thinking: { type: effort === 'off' ? 'disabled' : 'enabled' }, ...(effort === 'off' ? {} : { reasoning_effort: effort }) };
+  }
+  if (effort === 'off') {
+    if (family === 'openai' && model?.reasoningEfforts?.some(e => e !== 'off')) return protocol === 'responses' ? { reasoning: { effort: 'none' } } : protocol === 'chat-completions' ? { reasoning_effort: 'none' } : {};
+    return {};
+  }
+  if (protocol === 'responses') return { reasoning: { effort } };
+  if (protocol === 'anthropic-messages') {
+    if (family === 'anthropic-adaptive') return { thinking: { type: 'adaptive' }, output_config: { effort } };
+    return { thinking: { type: 'enabled', budget_tokens: Math.max(1, Math.min(maxTokens - 1, effort === 'low' ? 1024 : effort === 'medium' ? 2048 : effort === 'high' ? 4096 : 8192)) } };
+  }
+  return { reasoning_effort: effort };
+}
+function temperatureParameters(options: GenerateOptions, model: GatewayModel | undefined, effort: string): Record<string, unknown> {
+  const doc = model && modelDocumentation(model.id);
+  const value = options.temperature ?? model?.defaultTemperature;
+  if (value === undefined) return {};
+  if (doc && (!doc.temperature || doc.reasoningStyle === 'deepseek' && effort !== 'off')) return {};
+  return { temperature: value };
+}
+function stopParameters(options: GenerateOptions, model: GatewayModel | undefined, protocol: GatewayProtocol): Record<string, unknown> {
+  // Responses has no stop parameter; reasoning models may reject it even in Chat.
+  if (options.stop === undefined || protocol === 'responses' || model && modelDocumentation(model.id)?.stop === false) return {};
+  return protocol === 'anthropic-messages' ? { stop_sequences: Array.isArray(options.stop) ? options.stop : [options.stop] } : { stop: options.stop };
 }
 
 function nativeSearchPrompt(wire: WireMessage[], native: NativeSearchMode | undefined): WireMessage[] {
@@ -82,11 +117,11 @@ function responseBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined, 
   return {
     model: options.model, input, stream: true,
     ...(instructions ? { instructions } : {}),
-    ...(effort === 'off' ? {} : { reasoning: { effort } }),
+    ...reasoningParameters(model, 'responses', effort, options.maxTokens ?? model?.maxTokens ?? 32768),
     max_output_tokens: options.maxTokens ?? model?.maxTokens,
-    ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
-    ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })) } : {}),
+    ...temperatureParameters(options, model, effort),
+    ...stopParameters(options, model, 'responses'),
+    ...(selected.tools?.length ? { tools: selected.tools.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })) } : {}),
     ...(native ? { tools: [...(selected.tools ?? []).map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })), { type: String(model?.nativeSearchConfig?.type ?? 'web_search'), ...(model?.nativeSearchConfig ?? {}) }] } : {}),
   };
 }
@@ -123,10 +158,10 @@ function anthropicBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined,
   return {
     model: options.model, messages, max_tokens: options.maxTokens ?? model?.maxTokens ?? 32768, stream: true,
     ...(system ? { system } : {}),
-    ...(effort === 'off' ? {} : { thinking: { type: 'enabled', budget_tokens: Math.max(1024, Math.min((options.maxTokens ?? model?.maxTokens ?? 32768) - 1, effort === 'low' ? 1024 : effort === 'high' ? 4096 : 8192)) } }),
-    ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
-    ...(options.stop === undefined ? {} : { stop_sequences: Array.isArray(options.stop) ? options.stop : [options.stop] }),
-    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) } : {}),
+    ...reasoningParameters(model, 'anthropic-messages', effort, options.maxTokens ?? model?.maxTokens ?? 32768),
+    ...temperatureParameters(options, model, effort),
+    ...stopParameters(options, model, 'anthropic-messages'),
+    ...(selected.tools?.length ? { tools: selected.tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) } : {}),
     ...(native ? { tools: [...(selected.tools ?? []).map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })), { type: 'web_search_20250305', name: 'web_search', max_uses: model?.nativeSearchMaxUses ?? 5, ...(model?.nativeSearchConfig ?? {}) }] } : {}),
   };
 }
@@ -140,9 +175,9 @@ export interface SerializationServices {
 
 export async function serializeRequest(options: GenerateOptions, profile: ResolvedProfile, services: SerializationServices = {}): Promise<Record<string, unknown>> {
   const model = profile.models.find(m => m.id === options.model);
-  const effort = options.purpose === 'session-title' ? 'off' : options.reasoningEffort ?? model?.defaultReasoningEffort ?? profile.reasoningEffort;
-  if (!EFFORTS.includes(effort as typeof EFFORTS[number])) throw new LlmError('不支持的 DeepSeek 推理强度', 'UNSUPPORTED_REASONING_EFFORT');
-  if (options.purpose !== 'session-title' && model?.reasoningEfforts && !model.reasoningEfforts.includes(effort as typeof EFFORTS[number])) throw new LlmError(`${options.model} 不支持推理档位 ${effort}`, 'UNSUPPORTED_REASONING_EFFORT');
+  const effort = options.purpose === 'session-title' ? (model?.reasoningEfforts?.includes('off') ? 'off' : model?.reasoningEfforts?.[0] ?? 'off') : options.reasoningEffort ?? model?.defaultReasoningEffort ?? profile.reasoningEffort;
+  if (!EFFORTS.includes(effort as typeof EFFORTS[number])) throw new LlmError('不支持的推理强度', 'UNSUPPORTED_REASONING_EFFORT');
+  if (model?.reasoningEfforts && !model.reasoningEfforts.includes(effort as typeof EFFORTS[number])) throw new LlmError(`${options.model} 不支持推理档位 ${effort}`, 'UNSUPPORTED_REASONING_EFFORT');
   const imageCapable = model?.inputModalities?.includes('image') === true;
   const projected = projectToolUpdates(options.messages, options.tools, undefined, options.toolHistory);
   const hasImages = projected.messages.some(m => contentHasImage(m.content));
@@ -238,7 +273,9 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
     }
   }
   flush();
-  const tools = projected.tools?.map(tool => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  const tools = projected.tools?.filter(tool => tool.name === 'web_search'
+    ? model?.supportsWebSearch === true && (model.supportsTools === true || model.nativeSearch !== 'none')
+    : model?.supportsTools === true).map(tool => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
   const protocol: GatewayProtocol = profile.protocol ?? 'chat-completions';
   if (protocol === 'responses') return responseBody(wire, tools, options, model, effort);
   if (protocol === 'anthropic-messages') return anthropicBody(wire, tools, options, model, effort);
@@ -246,12 +283,13 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
   const selected = splitSearchTool(tools, native);
   return {
     model: options.model, messages: nativeSearchPrompt(wire, native), stream: true, stream_options: { include_usage: true },
-    thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
-    ...(effort === 'off' ? {} : { reasoning_effort: effort }),
-    max_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens,
-    ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
-    ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ type: 'function', function: tool })) } : {}),
+    ...reasoningParameters(model, 'chat-completions', effort, options.maxTokens ?? model?.maxTokens ?? profile.maxTokens),
+    ...(model?.providerFamily === 'openai' && model.reasoningEfforts?.some(e => e !== 'off')
+      ? { max_completion_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens }
+      : { max_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens }),
+    ...temperatureParameters(options, model, effort),
+    ...stopParameters(options, model, 'chat-completions'),
+    ...(selected.tools?.length ? { tools: selected.tools.map(tool => ({ type: 'function', function: tool })) } : {}),
     ...(native ? { web_search_options: { ...(model?.nativeSearchConfig ?? {}), ...(model?.nativeSearchMaxUses ? { max_uses: model.nativeSearchMaxUses } : {}) } } : {}),
   };
 }
