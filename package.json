@@ -30,6 +30,7 @@
     "cordis.patch.yml",
     "examples",
     "README.md",
+    "FRONTEND_DEVELOPMENT.md",
     "LICENSE",
     "VALIDATION.md"
   ],

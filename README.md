@@ -71,6 +71,8 @@ llm-deepseek-gateway:
 
 ## 开发与验证
 
+客户端改动请遵守 [FRONTEND_DEVELOPMENT.md](FRONTEND_DEVELOPMENT.md)，其中记录 DSH 桌面端设计令牌、布局、可访问性、凭据安全和验证要求。
+
 ```powershell
 npm test
 npm run typecheck

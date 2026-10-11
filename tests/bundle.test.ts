@@ -26,6 +26,10 @@ test('distributed client loads through harness module loader and disposes slots/
   assert.deepEqual(registrations.map(r => r.name), ['settings.models.footer', 'settings.models.provider-card']);
   assert.equal(registrations[1].key, 'llm-deepseek-gateway');
   assert.equal(dom.window.document.head.querySelectorAll('style').length, 1);
+  const style = dom.window.document.head.querySelector('style[data-plugin="dsh-deepseek-gateway"]')!;
+  assert.match(style.textContent!, /--dsw-alias-label-primary/);
+  assert.match(style.textContent!, /--dsw-radius-lg/);
+  assert.doesNotMatch(style.textContent!, /#8884|#8885|#568cf5/);
   for (const dispose of disposers.reverse()) dispose();
   assert.equal(registrations.length, 0);
   assert.equal(dom.window.document.head.querySelectorAll('style').length, 0);
