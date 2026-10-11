@@ -10,8 +10,9 @@ interface Injected {
     scope: ConfigForm<Section>;
     operations: ClientOperations;
     taken: () => readonly string[];
+    ctx: Context;
 }
-export declare function GatewayFooter({ scope, operations, taken }: Injected): import("react/jsx-runtime").JSX.Element | null;
+export declare function GatewayFooter({ scope, operations, taken, ctx }: Injected): import("react/jsx-runtime").JSX.Element | null;
 export declare function GatewayCard({ provider, scope, operations, taken }: Injected & ProviderCardExtrasOwnerProps): import("react/jsx-runtime").JSX.Element | null;
 export declare const inject: string[];
 export declare function apply(ctx: Context): void;

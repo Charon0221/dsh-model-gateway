@@ -1,6 +1,6 @@
 # 验收记录
 
-当前插件版本：`0.4.0`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议，并支持网关原生搜索与 DSH `ctx.web` 搜索 provider。
+当前插件版本：`0.4.1`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议，并支持网关原生搜索与 DSH `ctx.web` 搜索 provider。
 
 本地自动化验收覆盖：
 

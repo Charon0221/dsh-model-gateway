@@ -10,22 +10,44 @@ import type { ClientOperations } from './controller.js';
 import { checkForUpdate, PLUGIN_VERSION, type PluginUpdateInfo } from './updates.js';
 
 interface Section { providers?: Record<string, GatewayProfile> }
-interface Injected { scope: ConfigForm<Section>; operations: ClientOperations; taken: () => readonly string[] }
+interface Injected { scope: ConfigForm<Section>; operations: ClientOperations; taken: () => readonly string[]; ctx: Context }
 function useSnapshot(scope: ConfigForm<Section>) { return useSyncExternalStore(scope.subscribe.bind(scope), scope.getSnapshot.bind(scope), scope.getSnapshot.bind(scope)); }
-export function GatewayFooter({ scope, operations, taken }: Injected) {
+export function GatewayFooter({ scope, operations, taken, ctx }: Injected) {
   const state = useSnapshot(scope);
   const [open, setOpen] = useState<'custom' | 'senjix'>();
   const [update, setUpdate] = useState<PluginUpdateInfo | null>();
   const [copied, setCopied] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
   useEffect(() => { let active = true; void checkForUpdate().then(value => { if (active) setUpdate(value); }); return () => { active = false; }; }, []);
   const copyInstallSpec = async () => {
     if (!update || !navigator.clipboard) return;
     try { await navigator.clipboard.writeText(update.installSpec); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* clipboard permission is optional */ }
   };
+  const installUpdate = async () => {
+    if (!update || updating) return;
+    const manager = (ctx.remote as any).pluginManager;
+    if (!manager?.installBundle) {
+      setUpdateMessage('当前 DSH 未提供自动更新接口，请复制安装地址后到插件设置中更新。');
+      return;
+    }
+    setUpdating(true); setUpdateMessage('');
+    try {
+      const result = await manager.installBundle(update.installSpec, { enabled: true });
+      if (!result?.ok) throw new Error(result?.error?.message ?? '插件更新请求失败');
+      const value = result.value;
+      if (value?.application === 'failed' || value?.error) throw new Error(value.error?.diagnostic ?? '插件更新失败');
+      setUpdateMessage(value?.application === 'restart-required' || value?.application === 'applied'
+        ? '更新已安装，重启 DSH 后生效。'
+        : '更新请求已提交，请到插件设置查看状态。');
+    } catch (error) {
+      setUpdateMessage(error instanceof Error ? error.message : '插件更新失败，请复制安装地址手动更新。');
+    } finally { setUpdating(false); }
+  };
   if (state.status !== 'ready') return null;
   return <section className="dsg-section" aria-label="第三方模型网关">
     <div className="dsg-section-heading"><div><h3>第三方模型网关</h3><p>连接深极云算提供的模型，可选择 OpenAI Chat Completions、OpenAI Responses 或 Anthropic Messages 协议。</p></div></div>
-    {update && <div className="dsg-update" role="status"><span>发现新版本 v{update.latestVersion}（当前 v{PLUGIN_VERSION}）。</span><a href={update.releaseUrl} target="_blank" rel="noreferrer">查看发布说明</a><button className="dsg-button dsg-button-quiet dsg-button-small" type="button" onClick={copyInstallSpec}>{copied ? '已复制安装地址' : '复制安装地址'}</button><p>请在 DSH 设置 → 插件中卸载旧版后安装新版本；升级需要按桌面端提示重启。</p></div>}
+    {update && <div className="dsg-update" role="status"><span>发现新版本 v{update.latestVersion}（当前 v{PLUGIN_VERSION}）。</span><button className="dsg-button dsg-button-primary dsg-button-small" type="button" disabled={updating} onClick={installUpdate}>{updating ? '更新中…' : '更新插件'}</button><a href={update.releaseUrl} target="_blank" rel="noreferrer">查看发布说明</a><button className="dsg-button dsg-button-quiet dsg-button-small" type="button" onClick={copyInstallSpec}>{copied ? '已复制安装地址' : '复制安装地址'}</button><p>{updateMessage || '更新后按桌面端提示重启 DSH；如果当前版本没有自动更新接口，可复制安装地址手动更新。'}</p></div>}
     {open ? <GatewayEditor revision={state.revision!} taken={taken()} writable={state.writable} preset={open === 'senjix'} operations={operations} onClose={() => setOpen(undefined)} />
       : <div className="dsg-add-actions"><button className="dsg-button dsg-button-add" type="button" disabled={!state.writable} onClick={() => setOpen('custom')}>添加模型网关</button><button className="dsg-button dsg-button-link" type="button" disabled={!state.writable} onClick={() => setOpen('senjix')}>使用深极云算预填</button></div>}
   </section>;
@@ -58,7 +80,7 @@ export function GatewayCard({ provider, scope, operations, taken }: Injected & P
     {failure && <p role="alert" className="dsg-error">{failure}</p>}
   </div>;
 }
-export const inject = ['slots', 'configForms', 'remote', 'remote.settings', 'remote.credentials', 'remote.llm'];
+export const inject = ['slots', 'configForms', 'remote', 'remote.settings', 'remote.credentials', 'remote.llm', 'remote.pluginManager'];
 export function apply(ctx: Context): void {
   const scope = ctx.configForms.get<Section>(NS);
   let routes: readonly string[] = [];
@@ -84,7 +106,7 @@ export function apply(ctx: Context): void {
     removeKey: async ref => { const r = await ctx.remote.credentials.unset(ref); if (!r.ok) throw new Error(r.error.message); },
     discover: async request => { const r = await ctx.remote.llm.discoverModels(NS, request); if (!r.ok) throw new Error(r.error.message); return r.value as import('../shared.js').GatewayModel[]; },
   };
-  const injected = () => ({ scope, operations, taken: () => [...new Set([...routes, ...Object.keys(scope.getSnapshot().value?.providers ?? {})])] });
+  const injected = () => ({ scope, operations, taken: () => [...new Set([...routes, ...Object.keys(scope.getSnapshot().value?.providers ?? {})])], ctx });
   ctx.slots.inject('settings.models.footer', () => ctx.slots.register({ name: 'settings.models.footer', id: NS, order: 20, inject: injected }, GatewayFooter));
   ctx.slots.inject('settings.models.provider-card', () => ctx.slots.register({ name: 'settings.models.provider-card', key: NS, inject: injected }, GatewayCard));
   ctx.effect(() => {
