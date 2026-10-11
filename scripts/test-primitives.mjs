@@ -3,7 +3,7 @@
 import { build } from 'esbuild';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 await mkdir('test-results', { recursive: true });
-await build({ stdin: { contents: "export { Button, Input, Checkbox, Switch, Modal, Tag, StateDot, Menu, IconPlusOutlineRegular, IconTrashOutlineRegular, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'", resolveDir: process.cwd() }, outfile: 'test-results/primitives.cjs', bundle: true, format: 'cjs', platform: 'node', treeShaking: true,
+await build({ stdin: { contents: "export { Button, Input, Checkbox, Switch, Modal, Tag, StateDot, Menu, DisclosureRow, IconPlusOutlineRegular, IconTrashOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, IconSettingsOutlineRegular, IconSlidersTwoOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'", resolveDir: process.cwd() }, outfile: 'test-results/primitives.cjs', bundle: true, format: 'cjs', platform: 'node', treeShaking: true,
   plugins: [{ name: 'host-ui', setup(build) {
     build.onResolve({ filter: /^[^./]/ }, args => args.path === '@deepseek-ai/dsh-client-ui-primitives' ? undefined : { path: args.path, external: true, sideEffects: false });
     build.onLoad({ filter: /\.css$/ }, async args => { const css = await readFile(args.path, 'utf8'); const classes = Object.fromEntries([...css.matchAll(/\.([A-Za-z_][\w-]*)/g)].map(m => [m[1], m[1]])); return { contents: `export default ${JSON.stringify(classes)}`, loader: 'js' }; });

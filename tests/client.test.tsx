@@ -10,7 +10,7 @@ import { Selection } from '../src/client/controls.js';
 
 test('Models editor renders preset, recovers discovery failure and saves a manually edited model', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(Date.now()), 0), cancelAnimationFrame: (id: number) => clearTimeout(id), getComputedStyle: dom.window.getComputedStyle.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true });
   const container = document.getElementById('root')!;
   const root = createRoot(container);
   let closed = false;
@@ -21,16 +21,21 @@ test('Models editor renders preset, recovers discovery failure and saves a manua
     write: async (ops: any[]) => { saved = ops; return { revision: 2 }; },
     storeKey: async () => {}, removeKey: async () => {},
   } as unknown as ClientOperations;
-  const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent === text)!;
+  const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
   try {
     await act(async () => { root.render(<GatewayEditor preset revision={1} taken={[]} writable operations={operations} onClose={() => { closed = true; }} />); });
+    await act(async () => { container.querySelector<HTMLElement>('[data-disclosure-row]')!.click(); });
     assert.ok([...container.querySelectorAll('input')].some(i => i.value === 'https://senjix.cloud/v1'));
     assert.ok([...container.querySelectorAll('input')].some(i => i.value === 'deepseek-flash'));
-    await act(async () => { button('展开能力设置').click(); });
+    assert.equal(container.querySelector('[role="dialog"]'), null);
+    assert.ok(container.querySelector('.dsg-model-entry'));
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="展开模型能力"]')!.click(); });
     assert.equal(container.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked, true);
-    await act(async () => { button('获取网关模型').click(); });
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="网关操作"]')!.click(); });
+    await act(async () => { [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes('模型目录'))!.click(); });
+    await act(async () => { [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes('获取网关模型'))!.click(); });
     assert.match(container.textContent!, /模型列表不可用/);
-    await act(async () => { container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click(); });
+    await act(async () => { [...container.querySelectorAll<HTMLLabelElement>('label')].find(label => label.textContent?.includes('图片'))!.querySelector<HTMLInputElement>('input')!.click(); });
     await act(async () => { button('保存').click(); });
     assert.equal(closed, true);
     assert.deepEqual(saved[0].value.models[0].inputModalities, ['text']);
@@ -45,7 +50,7 @@ test('native menu supports keyboard selection; editor restores defaults and reta
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), getComputedStyle: dom.window.getComputedStyle.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true });
   const container = document.getElementById('root')!; const root = createRoot(container);
-  let selected = ''; const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent === text)!;
+  let selected = ''; const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
   try {
     await act(async () => { root.render(<Selection label="Protocol" value="chat" options={[{ value: 'chat', label: 'Chat' }, { value: 'responses', label: 'Responses' }]} onChange={value => { selected = value; }} />); });
     await act(async () => { container.querySelector('button')!.focus(); container.querySelector('button')!.click(); });
@@ -56,7 +61,8 @@ test('native menu supports keyboard selection; editor restores defaults and reta
     let attempted: any;
     const operations = { credential: async () => ({ configured: true, writable: true }), write: async (ops: any[]) => { attempted = ops; throw new Error('配置 revision 冲突'); } } as unknown as ClientOperations;
     await act(async () => { root.render(<GatewayEditor route="test" initial={{ baseURL: 'https://example.com/v1', apiKeyEnv: 'EXISTING', protocol: 'responses', models: [{ id: 'deepseek-flash', name: '我的模型', description: '保留说明', supportsTools: false, inputModalities: ['text'], nativeSearchConfig: { type: 'web_search_preview' }, nativeSearchMaxUses: 9, imageMaxBytes: 1234 }], webSearch: { enabled: false } }} revision={1} taken={[]} writable operations={operations} onClose={() => {}} />); });
-    await act(async () => { button('展开能力设置').click(); button('恢复官方默认').click(); });
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="展开模型能力"]')!.click(); });
+    await act(async () => { button('恢复官方默认').click(); });
     assert.match(container.textContent!, /2026-10-11/); assert.equal(container.querySelector('a')?.getAttribute('href'), 'https://api-docs.deepseek.com/quick_start/pricing/');
     assert.equal(container.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked, true);
     assert.equal(container.querySelector('[role=switch]')?.getAttribute('aria-checked'), 'false');

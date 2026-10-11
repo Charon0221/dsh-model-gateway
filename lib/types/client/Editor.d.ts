@@ -9,5 +9,6 @@ export interface EditorProps {
     writable: boolean;
     operations: ClientOperations;
     onClose: () => void;
+    onDelete?: () => void;
 }
 export declare function GatewayEditor(props: EditorProps): import("react/jsx-runtime").JSX.Element;
