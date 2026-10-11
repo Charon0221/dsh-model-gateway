@@ -89,7 +89,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('settings.models.provider-card', () => ctx.slots.register({ name: 'settings.models.provider-card', key: NS, inject: injected }, GatewayCard));
   ctx.effect(() => {
     const style = document.createElement('style');
-    style.dataset.plugin = 'dsh-deepseek-gateway';
+    style.dataset.plugin = 'dsh-model-gateway';
     style.textContent = `
       .dsg-section{max-width:720px;color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:12px}
       .dsg-section h3,.dsg-editor h3{margin:0;font-size:16px;font-weight:500;line-height:24px}

@@ -14,5 +14,5 @@ const client = await build({
   external: ['react', 'react/*', '@deepseek-ai/*'],
 });
 // dsh's browser module loader supplies shared React/services via require().
-await writeFile('lib/client.js', `window.__ModuleLoader__.load({id:"dsh-deepseek-gateway",factory:(require)=>{var module={exports:{}};var exports=module.exports;\n${client.outputFiles[0].text}\nreturn module.exports;}});\n`);
+await writeFile('lib/client.js', `window.__ModuleLoader__.load({id:"dsh-model-gateway",factory:(require)=>{var module={exports:{}};var exports=module.exports;\n${client.outputFiles[0].text}\nreturn module.exports;}});\n`);
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '--emitDeclarationOnly'], { stdio: 'inherit' });

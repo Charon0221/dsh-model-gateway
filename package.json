@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-gateway",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "深极云算多模型三协议适配器与 dsh Models 页面扩展",
   "type": "module",
   "license": "MIT",
