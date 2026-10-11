@@ -5,13 +5,13 @@
 本地自动化验收覆盖：
 
 - 自动化测试覆盖：SSE UTF-8 分片、推理与文本交错、分片工具参数、多工具身份、工具结果图片、尾部 usage、空响应、异常 JSON、断流、取消、超时、鉴权/限流/额度/上下文/协议错误、配置动态增删与 revision 冲突、无效更新回滚、页面发现失败与手工模型保存、模型发现鉴权与去重。
-- 24 项测试通过，包括三种协议的请求与流转换、原生搜索工具替换、网关 web provider 引用归一化、发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
+- 33 项测试通过，包括三种协议的请求与流转换、原生搜索工具替换、网关 web provider 引用归一化、发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。搜索回归覆盖 Responses 完整参数事件与最终快照、并行调用与去重、参数冲突/截断/异常终止、三协议来源链接、原生搜索失败和未声明搜索函数拦截，以及模拟 HTTP 工具结果续答。
 - `npm run typecheck` 和 `npm run build` 通过。
 - 浏览器产物使用 dsh `window.__ModuleLoader__` 入口，Host 产物为独立 ESM。
 - 独立 `DSH_HOME` 下使用 DSH `0.2.0-rc.2` 执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现第三方模型网关和官方模型预设入口。
 - 页面真实保存深极云算预填配置成功，编辑表单出现；聊天模型选择器列出并可选择本网关的 `DeepSeek V4.1 Flash`，显示默认推理等级“高”。验收配置不写入 API Key。
 - Models 页会自动读取公开 GitHub Releases 并按 6 小时缓存比较版本；新版本显示发布页和带标签安装地址，网络失败不影响配置和模型请求。由于 DSH 0.2 插件管理器当前不支持原地升级，未实现后台卸载、替换或重启。
-- 使用网关网页搜索时必须选择 `DSH_WEB_SEARCH_PROVIDER=model-gateway-web`。原生搜索模型按模型条目的 `nativeSearch` 字段透传；未声明原生能力的模型使用通用网关搜索配置。官方 `deepseek-official` provider 不会被插件自动覆盖。
+- 模型原生搜索按 `nativeSearch` 透传，与独立搜索桥接 `webSearch.enabled` 分开；桥接关闭时原生搜索仍可使用。需要独立桥接时显式选择 `model-gateway-web`，已有 `web.searchProvider` 配置优先于环境变量。官方 `deepseek-official` provider 不会被插件自动覆盖；原生搜索失败不会回退官方搜索。
 - UI 适配回归覆盖 DSH 原生设计令牌、卡片/编辑器/模型列表/发现区域的 DOM 结构、卸载清理和无硬编码颜色检查；客户端样式使用 `--dsw-alias-*`、`--dsw-radius-*` 和 `--ds-font-family-code`。
 - 使用 DSH 自身兼容性检查函数验证：拒绝 `0.1.5-rc.2`，接受 `0.2.0-rc.2`、`0.2.0`、`0.2.1-alpha.1` 和 `0.3.0`。后两项仅验证安装范围，不代表已经实测未来运行时。
 - 桌面端安装使用同一 bundle patch 和官方 `web` 客户端声明。GitHub 仓库提交 `lib` 构建产物，适合通过桌面端的 GitHub URL 输入框安装。另一台机器的桌面端安装尚未实机执行；当前验证覆盖本机相同 Web 渲染模块与隔离 profile。
@@ -32,3 +32,23 @@ npm run test:live
 - `off/low/high/max` 均完成流式文本，均返回 `323`；网关也在 `off` 请求中返回了 `reasoning_content`，因此不能把“请求字段被接受”解释为网关真正关闭推理。
 - 原生 `lookup_secret` 工具调用完成，参数分片合并为 `{"label":"alpha"}`；提交工具结果后模型继续回答 `alpha = 7319`。
 - 64×64 红色 PNG 通过内联 data URL 识别为“红色”。这证明本次目标服务实际接受图片，配置仍要求用户显式声明图片能力，避免目录信息自动赋能。
+
+
+原生搜索修复验收（2026-10-11，本地构建，未发布新版本）：
+
+- `senjix/gpt-6.1-sol`，端点 `https://senjix.cloud/v1/responses`，HTTP 200。请求只包含本地 `web_fetch` 和服务端 `web_search_preview`，没有本地 `web_search` 函数。
+- 上游返回 4 组 `response.web_search_call.in_progress/searching/completed`，并返回引用事件；解析后的最终回复包含去重的搜索来源链接，正常以 `stop` 结束。未调用官方 DeepSeek 搜索。
+- 本次真实搜索未触发本地抓取，因此完整 `url` 的保留另由模拟 SSE 与真实本地 HTTP 对话回归验证。验收只证明该网关当次提供原生搜索和引用，不保证上游新闻内容准确。
+- 脱敏验收摘要保存在忽略目录 `test-results/native-search-live.json`，不包含凭据。
+- 已备份 desktop profile 原安装目录到 `C:/Users/Administrator/.dsh/profiles/desktop/.plugin-manager/backups/native-search-20261011/dsh-model-gateway`，将修复产物安装到该 profile 的 `node_modules/dsh-model-gateway/lib`。仓库与安装目录的 `index.js` SHA256 一致：`049921539952A93376EE6BD0ACA5AC53028E8BACADEFB61401568B7AC5E921D5`。
+- 桌面端无生成任务时完成重启，`E:/DSH/DeepSeek Harness.exe` 新进程启动时间为 2026-10-11 15:23:31。新建会话的模型选择器已确认服务商显示“深极云算”，当前选择 `gpt-6.1-sol`，未更换地址或凭据。
+- 初次桌面自动化受输入焦点问题影响；后续已完成桌面请求与用户手动验收，结果如下。
+
+桌面真实验收补充（2026-10-11，深极云算 `gpt-6.1-sol`）：
+
+- 桌面真实请求和最小接口对照均发现上游当前拒绝 `web_search_preview`，返回 HTTP 400 `Unsupported tool type: web_search_preview`；此前成功记录仅代表此前那次请求。改用服务端 `web_search` 后最小接口对照返回 HTTP 200，包含 `response.web_search_call.in_progress/searching/completed` 与引用事件，正常以 `stop` 结束。脱敏对照记录为 `test-results/native-search-recheck.json`。
+- Responses 默认原生工具已改为 `web_search`，已有 `nativeSearchConfig.type` 仍可显式覆盖。重新构建、33 项测试、类型检查通过，并备份替换 desktop profile 的产物，重启桌面端。最终仓库与安装目录 `index.js` SHA256 一致：`03D35256D9FF598F385265A8D7CBBA329FC1225E7FA0E6C0895A5D755F9BB772`。
+- 用户提供的桌面截图显示 15:44 搜索轮次已完成，回答 Node.js 版本并显示独立“搜索来源”链接。上方 HTTP 400 为历史失败轮次；成功轮次证明桌面已加载修复后的实现并显示来源。
+- 用户随后手动请求抓取 `https://nodejs.org/en/download/current`。15:46:01 的轨迹截图显示单次 `web_fetch` 参数保留完整 URL，状态“已完成”，结果 `Fetched https://nodejs.org/en/download/current (HTTP 200)`，包含网页正文；随后助手根据工具结果回答 `Node.js — Download Node.js®`。未出现 `INVALID_ARGS`，真实抓取与工具结果续答通过。
+- 用户补充的 DeepSeek V4.1 Flash 桌面轨迹显示两次 `web_fetch` 均携带完整 URL，返回 HTTP 200，随后模型根据工具结果续答。该记录验证网页抓取与工具续答；这轮没有原生搜索执行证据，因此不声明已验证该模型的原生搜索。
+- 本机已验证深极云算 `gpt-6.1-sol` 原生搜索、来源显示，以及 GPT 和 DeepSeek V4.1 Flash 的完整抓取参数和工具结果续答。其他协议由模拟回归覆盖；未对其他上游或模型的原生搜索进行真实验收。

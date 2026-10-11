@@ -2,6 +2,7 @@ import { LlmError } from '@deepseek-ai/dsh-llm';
 import type { WebSearchProvider, WebSearchRequest, WebSearchResult } from '@deepseek-ai/dsh-web';
 import type { ResolvedProfile } from './config.js';
 import { errorCode, redactDiagnostic, requestHeaders } from './http.js';
+import { SearchSources } from './search-results.js';
 
 export const MODEL_GATEWAY_WEB_PROVIDER = 'model-gateway-web';
 
@@ -10,20 +11,9 @@ function endpoint(profile: ResolvedProfile, protocol: string): string {
 }
 
 function sourcesFrom(value: any): WebSearchResult['sources'] {
-  const output = Array.isArray(value?.output) ? value.output : [];
-  const annotations = output.flatMap((item: any) => Array.isArray(item?.content) ? item.content.flatMap((part: any) => part?.annotations ?? []) : item?.annotations ?? []);
-  const blocks = Array.isArray(value?.content) ? value.content : [];
-  const resultItems = blocks.flatMap((block: any) => block?.type === 'web_search_tool_result' && Array.isArray(block.content) ? block.content : []).filter((item: any) => item?.type === 'web_search_result');
-  const chatAnnotations = value?.choices?.flatMap((choice: any) => choice?.message?.annotations ?? []) ?? [];
-  const all = [...resultItems, ...annotations, ...chatAnnotations];
-  const seen = new Set<string>();
-  return all.flatMap((item: any) => {
-    const url = String(item?.url ?? item?.url_citation?.url ?? '');
-    if (!url || seen.has(url)) return [];
-    seen.add(url);
-    const title = item?.title ?? item?.url_citation?.title;
-    return [{ url, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof item?.snippet === 'string' && item.snippet ? { snippet: item.snippet } : {}) }];
-  });
+  const sources = new SearchSources();
+  sources.add(value);
+  return sources.values();
 }
 
 function nativeBody(profile: ResolvedProfile, model: string, query: string): Record<string, unknown> {
@@ -34,7 +24,7 @@ function nativeBody(profile: ResolvedProfile, model: string, query: string): Rec
   const maxUses = configured?.nativeSearchMaxUses ?? profile.webSearch.maxUses;
   if (mode === 'openai-responses') return {
     model, input: [{ role: 'user', content: [{ type: 'input_text', text: `Perform a web search for the query: ${query}` }] }], stream: false,
-    tools: [{ type: String(configured?.nativeSearchConfig?.type ?? 'web_search_preview'), ...(configured?.nativeSearchConfig ?? {}), ...(maxUses ? { max_uses: maxUses } : {}) }],
+    tools: [{ type: String(configured?.nativeSearchConfig?.type ?? 'web_search'), ...(configured?.nativeSearchConfig ?? {}) }],
   };
   if (mode === 'anthropic-messages') return {
     model, max_tokens: configured?.maxTokens ?? profile.maxTokens, messages: [{ role: 'user', content: [{ type: 'text', text: `Perform a web search for the query: ${query}` }] }],
@@ -51,12 +41,14 @@ export class GatewayWebSearchProvider implements WebSearchProvider {
     return false;
   }
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+    if (signal?.aborted) throw new LlmError('网页搜索已取消', 'WEB_ABORTED');
     const profiles = this.profiles();
     const route = this.currentProvider();
     const profile = (route ? profiles.get(route) : undefined) ?? profiles.values().next().value;
     if (!profile || !profile.webSearch.enabled) throw new LlmError('没有可用的模型网关网页搜索配置', 'WEB_PROVIDER_UNAVAILABLE');
     const model = profile.webSearch.model ?? profile.models.find(entry => entry.nativeSearch && entry.nativeSearch !== 'none')?.id ?? profile.models[0].id;
     const key = await this.resolveApiKey(profile);
+    if (signal?.aborted) throw new LlmError('网页搜索已取消', 'WEB_ABORTED');
     const native = profile.models.find(entry => entry.id === model)?.nativeSearch;
     if ((!native || native === 'none') && !profile.webSearch.allowGenericFallback) throw new LlmError('当前模型未配置原生搜索，且网关已关闭通用搜索回退', 'WEB_PROVIDER_UNAVAILABLE');
     const protocol = native === 'anthropic-messages' ? 'anthropic-messages' : native === 'openai-responses' ? 'responses' : native === 'openai-chat' ? 'chat-completions' : profile.protocol ?? 'chat-completions';

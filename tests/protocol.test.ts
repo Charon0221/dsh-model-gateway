@@ -101,7 +101,7 @@ test('native search replaces only the DSH web_search tool for each protocol', as
   const web = { name: 'web_search', description: 'search', parameters: { type: 'object' } };
   const fn = { name: 'lookup', description: 'lookup', parameters: { type: 'object' } };
   const responses = await serializeRequest({ ...options(), model: 'gpt-4.1', tools: [web, fn] }, profile({ protocol: 'responses', models: [{ id: 'gpt-4.1' }] }));
-  assert.deepEqual((responses.tools as any[]).map(tool => tool.type), ['function', 'web_search_preview']);
+  assert.deepEqual((responses.tools as any[]).map(tool => tool.type), ['function', 'web_search']);
   assert.equal((responses.tools as any[]).some(tool => tool.name === 'web_search'), false);
   const anthropic = await serializeRequest({ ...options(), model: 'claude-sonnet-4-20250514', tools: [web, fn] }, profile({ protocol: 'anthropic-messages', models: [{ id: 'claude-sonnet-4-20250514' }] }));
   assert.equal((anthropic.tools as any[]).some(tool => tool.type === 'web_search_20250305'), true);

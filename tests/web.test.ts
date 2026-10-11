@@ -13,7 +13,7 @@ test('gateway web provider routes native Responses search and normalizes citatio
   const result = await provider.search({ query: 'latest news' });
   assert.equal(result.sources[0].url, 'https://example.com');
   assert.equal(result.sources[0].title, 'Example');
-  assert.match(String(request?.body), /web_search_preview/);
+  assert.match(String(request?.body), /"type":"web_search"/);
   assert.match(String(request?.headers && new Headers(request.headers as HeadersInit).get('authorization')), /Bearer secret-key/);
 });
 

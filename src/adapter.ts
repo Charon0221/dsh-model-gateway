@@ -70,11 +70,12 @@ export class GatewayAdapter extends LlmAdapter {
         throw new LlmError('网关未返回 SSE 响应', 'MALFORMED_RESPONSE');
       }
       const payloads = ssePayloads(response.body, idle.pulse);
+      const streamOptions = { nativeSearch: !!(body.web_search_options || (Array.isArray(body.tools) && body.tools.some((tool: any) => tool.type === 'web_search_preview' || tool.type === 'web_search' || tool.type === 'web_search_20250305'))) };
       yield* protocol === 'responses'
-        ? translateResponses(payloads, [key, ...Object.values(profile.headers ?? {})])
+        ? translateResponses(payloads, [key, ...Object.values(profile.headers ?? {})], streamOptions)
         : protocol === 'anthropic-messages'
-          ? translateAnthropic(payloads, [key, ...Object.values(profile.headers ?? {})])
-          : translate(payloads, [key, ...Object.values(profile.headers ?? {})]);
+          ? translateAnthropic(payloads, [key, ...Object.values(profile.headers ?? {})], streamOptions)
+          : translate(payloads, [key, ...Object.values(profile.headers ?? {})], streamOptions);
     } catch (error) { throw idle.classify(error); }
     finally { idle.dispose(); }
   }
