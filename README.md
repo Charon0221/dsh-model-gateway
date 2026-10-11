@@ -10,28 +10,32 @@
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add .\dsh-deepseek-gateway-0.2.0.tgz
+dsh plugin --profile web add .\dsh-deepseek-gateway-0.2.1.tgz
 ```
 
 **其他电脑的 DeepSeek Harness 桌面端：** 在“设置 → 插件 → 添加插件”的输入框粘贴：
 
 ```text
-https://github.com/Charon0221/dsh-deepseek-gateway#v0.2.0
+https://github.com/Charon0221/dsh-deepseek-gateway#v0.2.1
 ```
 
-仓库包含构建产物，无需在目标电脑上编译 TypeScript。也可以下载 [v0.2.0 安装包](https://github.com/Charon0221/dsh-deepseek-gateway/releases/download/v0.2.0/dsh-deepseek-gateway-0.2.0.tgz)，输入该文件的本地完整路径。安装后按桌面端提示重启，再到 Models 页添加第三方网关；每台电脑单独配置凭据。插件声明 `platform: web` 与官方 Models UI 一致，供桌面端的 Web 渲染页面加载。不修改 dsh 源码。
+仓库包含构建产物，无需在目标电脑上编译 TypeScript。也可以下载 [v0.2.1 安装包](https://github.com/Charon0221/dsh-deepseek-gateway/releases/download/v0.2.1/dsh-deepseek-gateway-0.2.1.tgz)，输入该文件的本地完整路径。安装后按桌面端提示重启，再到 Models 页添加第三方网关；每台电脑单独配置凭据。插件声明 `platform: web` 与官方 Models UI 一致，供桌面端的 Web 渲染页面加载。不修改 dsh 源码。
 
-如旧版安装失败，请移除旧版后使用上面的 **v0.2.0 标签地址**重新安装；不要授予版本检查豁免。旧版 v0.1.0 面向 DSH 0.1，不能安装在 0.2 桌面端。
+如旧版安装失败，请移除旧版后使用上面的 **v0.2.1 标签地址**重新安装；不要授予版本检查豁免。旧版 v0.1.0 面向 DSH 0.1，不能安装在 0.2 桌面端。
 
 本地开发链接：先 `npm run build`，再运行 `dsh plugin --profile web link D:\git\dsh-deepseek-gateway`。更新源码后重新构建并重启 profile。公开 GitHub 仓库包含 Host 和浏览器入口，安装命令也可使用：
 
 ```powershell
-dsh plugin --profile web add github:Charon0221/dsh-deepseek-gateway#v0.2.0
+dsh plugin --profile web add github:Charon0221/dsh-deepseek-gateway#v0.2.1
 ```
 
 ## 配置
 
 在 Models 页点击“添加第三方 DeepSeek”，页面通过 DSH 0.2 配置编辑服务保存到当前 profile 的 patch。[examples/senjix.yml](examples/senjix.yml) 是字段说明，不能直接作为启动 patch。启动时使用 [examples/senjix.patch.yml](examples/senjix.patch.yml)，例如 `dsh --profile web --patch D:\git\dsh-deepseek-gateway\examples\senjix.patch.yml`。API Key 只通过 dsh 凭据服务或启动环境变量读取；示例中的 `SENJIX_API_KEY` 是凭据引用，不是密钥。
+
+从 v0.2.1 开始，插件会在 Models 页后台检查 GitHub Releases（6 小时缓存），发现新版本时显示发布说明和带版本标签的安装地址。检查失败会静默降级，不发送网关配置或 API Key。DSH 0.2 的插件管理器目前不支持已安装包原地升级，更新仍需在“设置 → 插件”中卸载旧版、安装提示的版本并按桌面端提示重启；插件不会后台修改 profile、执行 pnpm 或强制重启。v0.2.0 及更早版本没有更新检查代码，需要先手动升级到 v0.2.1 一次。
+
+向公开仓库推送匹配 `vMAJOR.MINOR.PATCH` 的 Git tag 会由 GitHub Actions 自动执行类型检查、测试、打包并创建 Release，上传对应 `.tgz`。tag 必须与 `package.json` 版本一致。
 
 ```yaml
 llm-deepseek-gateway:
