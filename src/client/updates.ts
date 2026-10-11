@@ -1,4 +1,4 @@
-export const PLUGIN_VERSION = '0.3.1';
+export const PLUGIN_VERSION = '0.3.2';
 export const RELEASES_URL = 'https://github.com/Charon0221/dsh-model-gateway/releases';
 export const LATEST_RELEASE_URL = 'https://api.github.com/repos/Charon0221/dsh-model-gateway/releases/latest';
 export const INSTALL_SPEC_PREFIX = 'github:Charon0221/dsh-model-gateway#';

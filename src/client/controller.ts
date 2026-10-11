@@ -18,7 +18,7 @@ export class SaveTransaction {
     if (!this.committed) {
       // Address only editable fields so undisplayed headers/retry policies and
       // other advanced fields survive editing a redacted settings descriptor.
-      const fields = ['displayName', 'baseURL', 'apiKeyEnv', 'models', 'reasoningEffort'] as const;
+      const fields = ['displayName', 'baseURL', 'protocol', 'apiKeyEnv', 'models', 'reasoningEffort'] as const;
       const ops: SettingsPathOpView[] = creating
         ? [{ op: 'set', path: ['providers', route], value: JSON.parse(JSON.stringify(profile)) }]
         : fields.map(field => profile[field] === undefined

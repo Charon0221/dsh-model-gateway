@@ -1,6 +1,7 @@
 import { LlmError } from '@deepseek-ai/dsh-llm';
+import type { GatewayProtocol } from './shared.js';
 export declare function errorCode(status: number, detail: string): string;
-export declare function requestHeaders(key: string, extra?: Record<string, string>, sessionId?: string): Record<string, string>;
+export declare function requestHeaders(key: string, extra?: Record<string, string>, sessionId?: string, protocol?: GatewayProtocol): Record<string, string>;
 export declare function redactDiagnostic(message: string, secrets: readonly string[]): string;
 export declare function httpFailure(response: Response, secrets?: readonly string[]): Promise<LlmError>;
 export declare function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T>;

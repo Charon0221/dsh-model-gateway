@@ -1,5 +1,5 @@
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
-import { type GenerateOptions, type ImageAttachmentAccessResolver } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, ImageAttachmentAccessResolver } from '@deepseek-ai/dsh-llm';
 import { type GatewayModel } from './shared.js';
 import type { ResolvedProfile } from './config.js';
 export type WirePart = {

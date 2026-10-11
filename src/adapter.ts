@@ -6,7 +6,7 @@ import { EFFORTS, type Effort } from './shared.js';
 import type { ResolvedProfile } from './config.js';
 import { serializeRequest, type SerializationServices } from './serialize.js';
 import { cancellable, httpFailure, idleControl, requestHeaders } from './http.js';
-import { ssePayloads, translate } from './stream.js';
+import { ssePayloads, translate, translateAnthropic, translateResponses } from './stream.js';
 
 export interface AdapterServices extends SerializationServices {
   profiles: () => ReadonlyMap<string, ResolvedProfile>;
@@ -57,8 +57,10 @@ export class GatewayAdapter extends LlmAdapter {
       const services = this.services.serializationServices?.() ?? this.services;
       const body = await cancellable(serializeRequest({ ...options, signal: idle.signal }, profile, services), idle.signal);
       idle.pulse();
-      const response = await (this.services.fetch ?? fetch)(`${profile.baseURL}/chat/completions`, {
-        method: 'POST', headers: requestHeaders(key, profile.headers, options.sessionId),
+      const protocol = profile.protocol ?? 'chat-completions';
+      const endpoint = protocol === 'responses' ? '/responses' : protocol === 'anthropic-messages' ? '/messages' : '/chat/completions';
+      const response = await (this.services.fetch ?? fetch)(`${profile.baseURL}${endpoint}`, {
+        method: 'POST', headers: requestHeaders(key, profile.headers, options.sessionId, protocol),
         body: JSON.stringify(body), signal: idle.signal, redirect: 'error',
       });
       idle.pulse();
@@ -67,7 +69,12 @@ export class GatewayAdapter extends LlmAdapter {
         await response.body?.cancel();
         throw new LlmError('网关未返回 SSE 响应', 'MALFORMED_RESPONSE');
       }
-      yield* translate(ssePayloads(response.body, idle.pulse), [key, ...Object.values(profile.headers ?? {})]);
+      const payloads = ssePayloads(response.body, idle.pulse);
+      yield* protocol === 'responses'
+        ? translateResponses(payloads, [key, ...Object.values(profile.headers ?? {})])
+        : protocol === 'anthropic-messages'
+          ? translateAnthropic(payloads, [key, ...Object.values(profile.headers ?? {})])
+          : translate(payloads, [key, ...Object.values(profile.headers ?? {})]);
     } catch (error) { throw idle.classify(error); }
     finally { idle.dispose(); }
   }

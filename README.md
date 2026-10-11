@@ -1,25 +1,25 @@
 # DSH Model Gateway
 
-`dsh-model-gateway` 是面向深极云算的多模型 Chat Completions 网关插件，支持 DSH 0.2 及以上（最低 `0.2.0-rc.2`）。它保留现有 `llm-deepseek-gateway` 配置 namespace，以便迁移后的 profile 继续使用已有配置。
+`dsh-model-gateway` 是面向深极云算的多模型网关插件，支持 DSH 0.2 及以上（最低 `0.2.0-rc.2`）。它保留现有 `llm-deepseek-gateway` 配置 namespace，以便迁移后的 profile 继续使用已有配置。
 
 插件支持深极云算 `/models` 返回的全部模型。已知的 DeepSeek、GPT、Claude、Grok 模型会带入官方上下文、输出上限、图片、推理、工具和 temperature 默认值；其他模型也可以添加，未知型号默认按文本模型处理。所有能力都能在模型编辑器中覆盖，实际网关能力以用户配置和服务响应为准。
 
-请求继续使用第三方 OpenAI/DeepSeek Chat Completions 兼容协议，不实现 Anthropic Messages 或其他原生协议转换。Claude、GPT、Grok 只有在深极云算通过兼容接口提供时才能使用。
+每条网关路由都可以选择 `OpenAI Chat Completions`、`OpenAI Responses` 或 `Anthropic Messages`。Claude、GPT、Grok 只有在深极云算通过所选协议提供时才能使用；协议字段不会在请求间自动切换。
 
 ## 安装
 
 在其他 DeepSeek Harness 桌面端的“设置 → 插件 → 添加插件”中输入：
 
 ```text
-https://github.com/Charon0221/dsh-model-gateway#v0.3.1
+https://github.com/Charon0221/dsh-model-gateway#v0.3.2
 ```
 
-也可以下载 [v0.3.1 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.3.1/dsh-model-gateway-0.3.1.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
+也可以下载 [v0.3.2 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.3.2/dsh-model-gateway-0.3.2.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
 
 命令行安装：
 
 ```powershell
-dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.3.1
+dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.3.2
 ```
 
 本地开发：
@@ -42,6 +42,7 @@ llm-deepseek-gateway:
     senjix:
       displayName: 深极云算
       baseURL: https://senjix.cloud/v1
+      protocol: chat-completions # 可选 responses 或 anthropic-messages
       apiKeyEnv: SENJIX_API_KEY
       models:
         - id: deepseek-v4.1-flash

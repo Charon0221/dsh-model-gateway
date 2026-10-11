@@ -2,6 +2,8 @@
 export declare const NS = "llm-deepseek-gateway";
 export declare const EFFORTS: readonly ["off", "low", "high", "max"];
 export type Effort = typeof EFFORTS[number];
+export declare const PROTOCOLS: readonly ["chat-completions", "responses", "anthropic-messages"];
+export type GatewayProtocol = typeof PROTOCOLS[number];
 export type ModelModality = 'text' | 'image';
 export declare const ROUTE_PATTERN: RegExp;
 export declare const SENJIX_PRESET: {
@@ -34,6 +36,7 @@ export interface GatewayModel {
 export interface GatewayProfile {
     displayName?: string;
     baseURL: string;
+    protocol?: GatewayProtocol;
     apiKeyEnv?: string;
     headers?: Record<string, string>;
     models: GatewayModel[];

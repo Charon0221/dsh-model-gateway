@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { GatewayAdapter } from '../src/adapter.js';
 import { resolveProfiles } from '../src/config.js';
-import { translate, mapUsage } from '../src/stream.js';
+import { translate, translateAnthropic, translateResponses, mapUsage } from '../src/stream.js';
 import { serializeRequest } from '../src/serialize.js';
 import { ReasoningEffortId, ToolCallId, attributionHeaders, createAssistantMessage, createUserMessage, createToolResultMessage, LlmError } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
@@ -83,6 +83,44 @@ test('official model defaults and user capability overrides apply per model', as
   assert.equal(custom.temperature, .2);
   assert.equal('tools' in custom, false);
   await assert.rejects(serializeRequest({ ...options(), model: 'custom', reasoningEffort: ReasoningEffortId('high') }, p), code('UNSUPPORTED_REASONING_EFFORT'));
+});
+
+test('Responses and Anthropic protocols serialize the same dsh conversation', async () => {
+  const history = [input(), createAssistantMessage({ source: { provider: 'test', model: 'deepseek' }, content: [{ type: 'tool-call', id: ToolCallId('call'), name: 'lookup', arguments: '{"x":1}' }] }), createToolResultMessage({ callId: ToolCallId('call'), content: [{ type: 'text', text: '42' }], isError: false })];
+  const tools = [{ name: 'lookup', description: 'read', parameters: { type: 'object' } }];
+  const responses = await serializeRequest({ ...options(), messages: history, tools }, profile({ protocol: 'responses' }));
+  assert.equal(responses.stream, true); assert.ok(Array.isArray(responses.input)); assert.equal((responses.tools as any[])[0].type, 'function');
+  assert.equal((responses.input as any[]).find(item => item.type === 'function_call_output').output, '42');
+  const anthropic = await serializeRequest({ ...options(), messages: history, tools }, profile({ protocol: 'anthropic-messages' }));
+  assert.equal(anthropic.stream, true); assert.equal((anthropic.tools as any[])[0].input_schema.type, 'object');
+  assert.equal((anthropic.messages as any[])[1].content[0].type, 'tool_use');
+  assert.equal((anthropic.messages as any[])[2].content[0].type, 'tool_result');
+});
+
+test('Responses and Anthropic SSE streams preserve reasoning, tools, usage and finish', async () => {
+  const responses = await collect(translateResponses(strings([
+    JSON.stringify({ type: 'response.reasoning_summary_text.delta', delta: 'think' }),
+    JSON.stringify({ type: 'response.output_text.delta', delta: 'hello' }),
+    JSON.stringify({ type: 'response.output_item.added', item: { type: 'function_call', id: 'item', call_id: 'call', name: 'lookup' } }),
+    JSON.stringify({ type: 'response.function_call_arguments.delta', item_id: 'item', delta: '{"x":1}' }),
+    JSON.stringify({ type: 'response.completed', response: { status: 'completed', usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } } }),
+  ])));
+  assert.equal(responses.find(c => c.type === 'text-delta')?.text, 'hello');
+  assert.equal(responses.find(c => c.type === 'reasoning-delta')?.text, 'think');
+  assert.equal(responses.filter(c => c.type === 'block-end').length, 3);
+  assert.equal(responses.at(-1)?.type, 'finish');
+  const anthropic = await collect(translateAnthropic(strings([
+    JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 2 } } }),
+    JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } }),
+    JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'why', text: 'why' } }),
+    JSON.stringify({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'call', name: 'lookup' } }),
+    JSON.stringify({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+    JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 3 } }),
+    JSON.stringify({ type: 'message_stop' }),
+  ])));
+  assert.equal(anthropic.find(c => c.type === 'reasoning-delta')?.text, 'why');
+  assert.equal(anthropic.filter(c => c.type === 'block-end').length, 2);
+  assert.equal((anthropic.at(-1) as any).reason.kind, 'tool-calls');
 });
 
 const ref = { attachmentId: 'image-one', mediaType: 'image/png', width: 20, height: 10, bytes: 3, name: 'shot.png', depth: 'uchar', space: 'srgb', hasAlpha: false } as unknown as ImageAttachmentRef;

@@ -1,7 +1,7 @@
 import z from '@deepseek-ai/schemastery';
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials';
 import { LlmError, RetryPolicySchema, resolveRetryPolicy, type ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm';
-import { EFFORTS, keyRefFor, ROUTE_PATTERN, type Effort, type GatewayModel, type GatewayProfile } from './shared.js';
+import { EFFORTS, PROTOCOLS, keyRefFor, ROUTE_PATTERN, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from './shared.js';
 import { enrichModel } from './catalog.js';
 
 export interface Config { providers?: Record<string, GatewayProfile> }
@@ -17,7 +17,7 @@ export const ModelSchema: z<GatewayModel> = z.object({
   imageMaxBytes: positiveInteger(),
 });
 export const ProfileSchema: z<GatewayProfile> = z.object({
-  displayName: z.string(), baseURL: z.string().required(), apiKeyEnv: z.string(),
+  displayName: z.string(), baseURL: z.string().required(), protocol: z.union([...PROTOCOLS]), apiKeyEnv: z.string(),
   headers: z.dict(z.string()).role('secret'), models: z.array(ModelSchema).required(),
   reasoningEffort: z.union([...EFFORTS]), defaultContextWindow: positiveInteger(),
   maxTokens: positiveInteger(), streamIdleTimeoutMs: positiveInteger().max(2147483647),
@@ -86,6 +86,7 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
     }
     const profile: ResolvedProfile = {
       ...raw, route, displayName: raw.displayName?.trim() || route,
+      protocol: (raw.protocol ?? 'chat-completions') as GatewayProtocol,
       baseURL: apiBaseURL(raw.baseURL), apiKeyEnv: credentialRef(raw.apiKeyEnv ?? keyRefFor(route)),
       headers: Object.freeze(headers), models: Object.freeze(models) as unknown as GatewayModel[],
       reasoningEffort: effort,

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { CredentialInfo } from '@deepseek-ai/dsh-api-remotes/client';
-import { EFFORTS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile } from '../shared.js';
+import { EFFORTS, PROTOCOLS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from '../shared.js';
 import { OFFICIAL_MODEL_CATALOG } from '../catalog.js';
 import { SaveTransaction, validateDraft, type ClientOperations } from './controller.js';
 
@@ -18,7 +18,7 @@ export function GatewayEditor(props: EditorProps) {
   const creating = !props.route;
   const initial: GatewayProfile = props.initial ?? (props.preset ? { displayName: SENJIX_PRESET.displayName, baseURL: SENJIX_PRESET.baseURL, apiKeyEnv: SENJIX_PRESET.apiKeyEnv, models: SENJIX_PRESET.models } : { baseURL: '', models: [] });
   const [route, setRoute] = useState(props.route ?? (props.preset ? 'senjix' : ''));
-  const [draft, setDraft] = useState<GatewayProfile>({ ...initial, models: initial.models.map(m => ({ ...m })), reasoningEffort: initial.reasoningEffort ?? 'high' });
+  const [draft, setDraft] = useState<GatewayProfile>({ ...initial, models: initial.models.map(m => ({ ...m })), protocol: initial.protocol ?? 'chat-completions', reasoningEffort: initial.reasoningEffort ?? 'high' });
   const [key, setKey] = useState('');
   const [credential, setCredential] = useState<CredentialInfo>();
   const [busy, setBusy] = useState(false);
@@ -79,6 +79,7 @@ export function GatewayEditor(props: EditorProps) {
     <div className="dsg-fields dsg-fields-primary">
       <label className="dsg-field"><span>提供方 ID</span><input value={route} disabled={locked || !creating} onChange={e => setRoute(e.target.value)} placeholder="my-deepseek" /></label>
       <label className="dsg-field"><span>显示名称</span><input value={draft.displayName ?? ''} disabled={locked} onChange={e => setDraft(p => ({ ...p, displayName: e.target.value || undefined }))} /></label>
+      <label className="dsg-field"><span>API 协议</span><select value={draft.protocol ?? 'chat-completions'} disabled={locked} onChange={e => setDraft(p => ({ ...p, protocol: e.target.value as GatewayProtocol }))}>{PROTOCOLS.map(protocol => <option key={protocol} value={protocol}>{protocol === 'chat-completions' ? 'OpenAI Chat Completions' : protocol === 'responses' ? 'OpenAI Responses' : 'Anthropic Messages'}</option>)}</select></label>
       <label className="dsg-field dsg-field-wide"><span>Base URL</span><input value={draft.baseURL} disabled={locked} onChange={e => setDraft(p => ({ ...p, baseURL: e.target.value }))} placeholder="https://gateway.example/v1" /></label>
       <label className="dsg-field"><span>凭据引用</span><input value={keyRef} disabled={locked} onChange={e => setDraft(p => ({ ...p, apiKeyEnv: e.target.value || undefined }))} /></label>
       <label className="dsg-field"><span>API Key</span><input type="password" autoComplete="off" value={key} disabled={busy || !props.writable || credential?.writable === false} onChange={e => setKey(e.target.value)} placeholder={credential?.configured ? '已配置；留空保持当前密钥' : '填写密钥或通过环境变量配置'} /></label>

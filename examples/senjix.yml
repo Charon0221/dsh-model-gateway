@@ -3,6 +3,7 @@ llm-deepseek-gateway:
     senjix:
       displayName: 深极云算
       baseURL: https://senjix.cloud/v1
+      protocol: chat-completions
       apiKeyEnv: SENJIX_API_KEY
       models:
         - id: deepseek-v4.1-flash

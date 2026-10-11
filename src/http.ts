@@ -1,4 +1,5 @@
 import { LlmError, ProviderRequestId, attributionHeaders, isContextWindowExceededError, isQuotaExceededError } from '@deepseek-ai/dsh-llm';
+import type { GatewayProtocol } from './shared.js';
 
 export function errorCode(status: number, detail: string): string {
   return status === 401 || status === 403 ? 'AUTH'
@@ -8,8 +9,11 @@ export function errorCode(status: number, detail: string): string {
     : status >= 500 ? 'SERVER' : status === 400 || status === 422 ? 'INVALID_REQUEST' : `HTTP_${status}`;
 }
 
-export function requestHeaders(key: string, extra?: Record<string, string>, sessionId?: string): Record<string, string> {
-  return { ...extra, authorization: `Bearer ${key}`, 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders(), ...(sessionId ? { 'x-deepseek-harness-session-id': sessionId } : {}) };
+export function requestHeaders(key: string, extra?: Record<string, string>, sessionId?: string, protocol: GatewayProtocol = 'chat-completions'): Record<string, string> {
+  const auth = protocol === 'anthropic-messages' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' } : { authorization: `Bearer ${key}` };
+  const headers: Record<string, string> = { ...(extra ?? {}), 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders(), ...(sessionId ? { 'x-deepseek-harness-session-id': sessionId } : {}) };
+  Object.assign(headers, auth);
+  return headers;
 }
 export function redactDiagnostic(message: string, secrets: readonly string[]): string {
   let safe = message;

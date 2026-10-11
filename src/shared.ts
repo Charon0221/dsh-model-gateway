@@ -2,6 +2,8 @@
 export const NS = 'llm-deepseek-gateway';
 export const EFFORTS = ['off', 'low', 'high', 'max'] as const;
 export type Effort = typeof EFFORTS[number];
+export const PROTOCOLS = ['chat-completions', 'responses', 'anthropic-messages'] as const;
+export type GatewayProtocol = typeof PROTOCOLS[number];
 export type ModelModality = 'text' | 'image';
 export const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 export const SENJIX_PRESET = {
@@ -30,6 +32,7 @@ export interface GatewayModel {
 export interface GatewayProfile {
   displayName?: string;
   baseURL: string;
+  protocol?: GatewayProtocol;
   apiKeyEnv?: string;
   headers?: Record<string, string>;
   models: GatewayModel[];

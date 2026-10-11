@@ -18,7 +18,7 @@ test('release check returns an install spec and caches successful checks', async
   };
   const first = await checkForUpdate(fetchImpl, 1000);
   const second = await checkForUpdate(fetchImpl, 1001);
-  assert.deepEqual(first, { currentVersion: '0.3.1', latestVersion: '9.1.0', releaseUrl: 'https://github.com/example/release', installSpec: 'github:Charon0221/dsh-model-gateway#v9.1.0' });
+  assert.deepEqual(first, { currentVersion: '0.3.2', latestVersion: '9.1.0', releaseUrl: 'https://github.com/example/release', installSpec: 'github:Charon0221/dsh-model-gateway#v9.1.0' });
   assert.deepEqual(second, first);
   assert.equal(calls, 1);
 });

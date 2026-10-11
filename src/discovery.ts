@@ -14,7 +14,7 @@ export async function discoverModels(
   try {
     const key = request.apiKey !== undefined ? assertUsableApiKey(request.apiKey, 'llm-deepseek-gateway', 'draft') : p ? await cancellable(resolveKey(p), idle.signal) : undefined;
     if (!key) throw new LlmError('获取模型需要 API Key；也可以手工填写模型', 'MISSING_CREDENTIAL');
-    const response = await fetch(`${apiBaseURL(base)}/models`, { headers: { ...requestHeaders(key, p?.headers), accept: 'application/json' }, signal: idle.signal, redirect: 'error' });
+    const response = await fetch(`${apiBaseURL(base)}/models`, { headers: { ...requestHeaders(key, p?.headers, undefined, p?.protocol ?? 'chat-completions'), accept: 'application/json' }, signal: idle.signal, redirect: 'error' });
     if (!response.ok) throw await httpFailure(response, [key, ...Object.values(p?.headers ?? {})]);
     const value = await response.json();
     const list = Array.isArray(value.data) ? value.data : Array.isArray(value.models) ? value.models : undefined;

@@ -24,7 +24,7 @@ export function GatewayFooter({ scope, operations, taken }: Injected) {
   };
   if (state.status !== 'ready') return null;
   return <section className="dsg-section" aria-label="第三方模型网关">
-    <div className="dsg-section-heading"><div><h3>第三方模型网关</h3><p>连接深极云算提供的 OpenAI/DeepSeek Chat Completions 兼容模型。</p></div></div>
+    <div className="dsg-section-heading"><div><h3>第三方模型网关</h3><p>连接深极云算提供的模型，可选择 OpenAI Chat Completions、OpenAI Responses 或 Anthropic Messages 协议。</p></div></div>
     {update && <div className="dsg-update" role="status"><span>发现新版本 v{update.latestVersion}（当前 v{PLUGIN_VERSION}）。</span><a href={update.releaseUrl} target="_blank" rel="noreferrer">查看发布说明</a><button className="dsg-button dsg-button-quiet dsg-button-small" type="button" onClick={copyInstallSpec}>{copied ? '已复制安装地址' : '复制安装地址'}</button><p>请在 DSH 设置 → 插件中卸载旧版后安装新版本；升级需要按桌面端提示重启。</p></div>}
     {open ? <GatewayEditor revision={state.revision!} taken={taken()} writable={state.writable} preset={open === 'senjix'} operations={operations} onClose={() => setOpen(undefined)} />
       : <div className="dsg-add-actions"><button className="dsg-button dsg-button-add" type="button" disabled={!state.writable} onClick={() => setOpen('custom')}>添加模型网关</button><button className="dsg-button dsg-button-link" type="button" disabled={!state.writable} onClick={() => setOpen('senjix')}>使用深极云算预填</button></div>}

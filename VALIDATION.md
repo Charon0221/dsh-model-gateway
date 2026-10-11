@@ -1,11 +1,11 @@
 # 验收记录
 
-当前插件版本：`0.3.1`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。
+当前插件版本：`0.3.2`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议。
 
 本地自动化验收覆盖：
 
 - 自动化测试覆盖：SSE UTF-8 分片、推理与文本交错、分片工具参数、多工具身份、工具结果图片、尾部 usage、空响应、异常 JSON、断流、取消、超时、鉴权/限流/额度/上下文/协议错误、配置动态增删与 revision 冲突、无效更新回滚、页面发现失败与手工模型保存、模型发现鉴权与去重。
-- 18 项测试通过，包括发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
+- 20 项测试通过，包括三种协议的请求与流转换、发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
 - `npm run typecheck` 和 `npm run build` 通过。
 - 浏览器产物使用 dsh `window.__ModuleLoader__` 入口，Host 产物为独立 ESM。
 - 独立 `DSH_HOME` 下使用 DSH `0.2.0-rc.2` 执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现第三方模型网关和官方模型预设入口。
