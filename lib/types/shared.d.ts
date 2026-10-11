@@ -2,6 +2,7 @@
 export declare const NS = "llm-deepseek-gateway";
 export declare const EFFORTS: readonly ["off", "low", "high", "max"];
 export type Effort = typeof EFFORTS[number];
+export type ModelModality = 'text' | 'image';
 export declare const ROUTE_PATTERN: RegExp;
 export declare const SENJIX_PRESET: {
     route: string;
@@ -11,7 +12,7 @@ export declare const SENJIX_PRESET: {
     models: {
         id: string;
         name: string;
-        inputModalities: ("text" | "image")[];
+        inputModalities: ModelModality[];
     }[];
 };
 export declare function keyRefFor(route: string): string;
@@ -21,7 +22,12 @@ export interface GatewayModel {
     description?: string;
     contextWindow?: number;
     maxTokens?: number;
-    inputModalities?: ('text' | 'image')[];
+    inputModalities?: ModelModality[];
+    providerFamily?: 'deepseek' | 'openai' | 'anthropic' | 'xai';
+    reasoningEfforts?: Effort[];
+    defaultReasoningEffort?: Effort;
+    supportsTools?: boolean;
+    defaultTemperature?: number;
     imagePixelBudget?: number | 'low';
     imageMaxBytes?: number;
 }

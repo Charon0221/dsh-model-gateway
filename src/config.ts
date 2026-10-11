@@ -2,13 +2,17 @@ import z from '@deepseek-ai/schemastery';
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials';
 import { LlmError, RetryPolicySchema, resolveRetryPolicy, type ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm';
 import { EFFORTS, keyRefFor, ROUTE_PATTERN, type Effort, type GatewayModel, type GatewayProfile } from './shared.js';
+import { enrichModel } from './catalog.js';
 
 export interface Config { providers?: Record<string, GatewayProfile> }
 const positiveInteger = () => z.number().min(1).step(1);
 export const ModelSchema: z<GatewayModel> = z.object({
   id: z.string().required(), name: z.string(), description: z.string(),
   contextWindow: positiveInteger(), maxTokens: positiveInteger(),
-  inputModalities: z.array(z.union(['text', 'image'])).default(['text']),
+  inputModalities: z.array(z.union(['text', 'image'])),
+  providerFamily: z.union(['deepseek', 'openai', 'anthropic', 'xai']),
+  reasoningEfforts: z.array(z.union([...EFFORTS])), defaultReasoningEffort: z.union([...EFFORTS]),
+  supportsTools: z.boolean(), defaultTemperature: z.number().min(0).max(2),
   imagePixelBudget: z.union([positiveInteger(), z.const('low')]),
   imageMaxBytes: positiveInteger(),
 });
@@ -62,9 +66,14 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
       if (m.name !== undefined && !m.name.trim()) throw new LlmError(`${route}/${m.id}: 显示名不能为空`, 'INVALID_CONFIG');
       for (const key of ['contextWindow', 'maxTokens', 'imageMaxBytes'] as const) if (m[key] !== undefined) number(m[key], 1, `${route}/${m.id}.${key}`);
       if (m.imagePixelBudget !== undefined && m.imagePixelBudget !== 'low') number(m.imagePixelBudget, 1, `${route}/${m.id}.imagePixelBudget`);
-      const input = m.inputModalities ?? ['text'];
-      if (!input.includes('text') || input.some(v => v !== 'text' && v !== 'image')) throw new LlmError(`${route}/${m.id}: 输入类型须包含 text，图片能力使用 image`, 'INVALID_CONFIG');
-      return Object.freeze({ ...m, inputModalities: Object.freeze([...input]) as unknown as ('text' | 'image')[] });
+      const input = m.inputModalities?.length ? m.inputModalities : undefined;
+      if (input && (!input.includes('text') || input.some(v => v !== 'text' && v !== 'image'))) throw new LlmError(`${route}/${m.id}: 输入类型须包含 text，图片能力使用 image`, 'INVALID_CONFIG');
+      const enriched = enrichModel({ ...m, ...(input ? { inputModalities: [...input] } : {}) });
+      const efforts = enriched.reasoningEfforts ?? [...EFFORTS];
+      if (!efforts.length || efforts.some(e => !EFFORTS.includes(e))) throw new LlmError(`${route}/${m.id}: 推理档位无效`, 'INVALID_CONFIG');
+      if (!efforts.includes(enriched.defaultReasoningEffort ?? 'high')) throw new LlmError(`${route}/${m.id}: 默认推理档位不在支持列表中`, 'INVALID_CONFIG');
+      if (enriched.defaultTemperature !== undefined && (!Number.isFinite(enriched.defaultTemperature) || enriched.defaultTemperature < 0 || enriched.defaultTemperature > 2)) throw new LlmError(`${route}/${m.id}: 默认 temperature 必须在 0 到 2 之间`, 'INVALID_CONFIG');
+      return Object.freeze({ ...enriched, inputModalities: Object.freeze([...(enriched.inputModalities ?? ['text'])]) as unknown as ('text' | 'image')[], reasoningEfforts: Object.freeze([...efforts]) as unknown as Effort[] });
     });
     const effort = raw.reasoningEffort ?? 'high';
     if (!EFFORTS.includes(effort)) throw new LlmError(`${route}: 不支持的推理强度`, 'INVALID_CONFIG');

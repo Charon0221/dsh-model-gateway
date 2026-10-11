@@ -26,7 +26,7 @@ test('Models editor renders preset, recovers discovery failure and saves a manua
     assert.ok([...container.querySelectorAll('input')].some(i => i.value === 'https://senjix.cloud/v1'));
     assert.ok([...container.querySelectorAll('input')].some(i => i.value === 'deepseek-v4.1-flash'));
     assert.equal(container.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked, false);
-    await act(async () => { button('获取可用模型').click(); });
+    await act(async () => { button('获取深极云算模型').click(); });
     assert.match(container.textContent!, /模型列表不可用/);
     await act(async () => { container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click(); });
     await act(async () => { button('保存').click(); });

@@ -1,13 +1,13 @@
 import type { CredentialInfo, LlmDiscoveredModel, LlmModelDiscoveryRequest, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client';
-import type { GatewayProfile } from '../shared.js';
-import { keyRefFor, NS, ROUTE_PATTERN } from '../shared.js';
+import type { GatewayModel, GatewayProfile } from '../shared.js';
+import { EFFORTS, keyRefFor, NS, ROUTE_PATTERN } from '../shared.js';
 
 export interface ClientOperations {
   write(ops: SettingsPathOpView[], revision: number): Promise<SettingsNamespaceView>;
   credential(ref: string): Promise<CredentialInfo | undefined>;
   storeKey(ref: string, key: string): Promise<void>;
   removeKey(ref: string): Promise<void>;
-  discover(request: LlmModelDiscoveryRequest): Promise<readonly LlmDiscoveredModel[]>;
+  discover(request: LlmModelDiscoveryRequest): Promise<readonly GatewayModel[]>;
 }
 /** Serialize a two-stage save. Once settings commit, retry only the key. */
 export class SaveTransaction {
@@ -48,5 +48,8 @@ export function validateDraft(route: string, p: GatewayProfile, key: string, tak
     ids.add(m.id);
     if (m.name !== undefined && !m.name.trim()) return '模型显示名不能为空';
     for (const value of [m.contextWindow, m.maxTokens]) if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) return '上下文和输出上限须是正整数';
+    if (m.defaultTemperature !== undefined && (!Number.isFinite(m.defaultTemperature) || m.defaultTemperature < 0 || m.defaultTemperature > 2)) return 'temperature 必须在 0 到 2 之间';
+    if (m.reasoningEfforts !== undefined && (!m.reasoningEfforts.length || m.reasoningEfforts.some(effort => !EFFORTS.includes(effort)))) return '推理档位配置无效';
+    if (m.defaultReasoningEffort !== undefined && m.reasoningEfforts !== undefined && !m.reasoningEfforts.includes(m.defaultReasoningEffort)) return '默认推理档位必须包含在支持列表中';
   }
 }

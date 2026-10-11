@@ -13,7 +13,7 @@ test('model discovery uses route headers and credentials, deduplicates candidate
     auth = req.headers.authorization; custom = req.headers['x-gateway'];
     res.setHeader('content-type', 'application/json');
     if (req.url === '/bad/models') { res.end('{}'); return; }
-    res.end(JSON.stringify({ data: [{ id: 'vision', context_window: 8192, max_tokens: 1024, inputModalities: ['image'] }, { id: 'vision' }, { id: 'text' }, null] }));
+    res.end(JSON.stringify({ data: [{ id: 'gpt-4.1' }, { id: 'vision', context_window: 8192, max_tokens: 1024, inputModalities: ['image'] }, { id: 'vision' }, { id: 'text' }, null] }));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => { server.closeAllConnections(); server.close(); });
@@ -21,9 +21,10 @@ test('model discovery uses route headers and credentials, deduplicates candidate
   const profiles = resolveProfiles({ providers: { gateway: { baseURL, models: [{ id: 'text' }], headers: { 'x-gateway': 'route-header' } } } });
   const candidates = await discoverModels({ provider: 'gateway' }, profiles, async () => 'local-key');
   assert.equal(auth, 'Bearer local-key'); assert.equal(custom, 'route-header');
-  assert.deepEqual(candidates.map(m => m.id), ['vision', 'text']);
-  assert.equal(candidates[0].contextWindow, 8192); assert.equal(candidates[0].maxTokens, 1024);
-  assert.equal('inputModalities' in candidates[0], false);
+  assert.deepEqual(candidates.map(m => m.id), ['gpt-4.1', 'vision', 'text']);
+  assert.equal(candidates[1].contextWindow, 8192); assert.equal(candidates[1].maxTokens, 1024);
+  assert.deepEqual(candidates[0].inputModalities, ['text', 'image']);
+  assert.equal('inputModalities' in candidates[1], false);
   await assert.rejects(discoverModels({ baseURL: `${baseURL}/bad`, apiKey: 'draft-key' }, profiles, async () => 'unused'), e => e instanceof LlmError && e.code === 'MALFORMED_RESPONSE');
   const cancel = new AbortController(); cancel.abort();
   await assert.rejects(discoverModels({ provider: 'gateway' }, profiles, async () => 'key', cancel.signal), e => e instanceof LlmError && e.code === 'ABORTED');

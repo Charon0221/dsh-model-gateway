@@ -21,7 +21,7 @@ export declare class GatewayAdapter extends LlmAdapter {
         id: string;
         name: string;
         description: string | undefined;
-        inputModalities: ("text" | "image")[];
+        inputModalities: import("./shared.js").ModelModality[];
     }[]>;
     private modelInfo;
     resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;

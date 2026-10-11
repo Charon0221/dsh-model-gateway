@@ -1,11 +1,11 @@
-import type { CredentialInfo, LlmDiscoveredModel, LlmModelDiscoveryRequest, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client';
-import type { GatewayProfile } from '../shared.js';
+import type { CredentialInfo, LlmModelDiscoveryRequest, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client';
+import type { GatewayModel, GatewayProfile } from '../shared.js';
 export interface ClientOperations {
     write(ops: SettingsPathOpView[], revision: number): Promise<SettingsNamespaceView>;
     credential(ref: string): Promise<CredentialInfo | undefined>;
     storeKey(ref: string, key: string): Promise<void>;
     removeKey(ref: string): Promise<void>;
-    discover(request: LlmModelDiscoveryRequest): Promise<readonly LlmDiscoveredModel[]>;
+    discover(request: LlmModelDiscoveryRequest): Promise<readonly GatewayModel[]>;
 }
 /** Serialize a two-stage save. Once settings commit, retry only the key. */
 export declare class SaveTransaction {

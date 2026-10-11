@@ -2,7 +2,7 @@ import {
   LlmAdapter, LlmError, ReasoningEffortId,
   type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk,
 } from '@deepseek-ai/dsh-llm';
-import { EFFORTS } from './shared.js';
+import { EFFORTS, type Effort } from './shared.js';
 import type { ResolvedProfile } from './config.js';
 import { serializeRequest, type SerializationServices } from './serialize.js';
 import { cancellable, httpFailure, idleControl, requestHeaders } from './http.js';
@@ -34,8 +34,8 @@ export class GatewayAdapter extends LlmAdapter {
       context: { contextWindow: m?.contextWindow ?? p.defaultContextWindow },
       defaultMaxTokens: m?.maxTokens ?? p.maxTokens,
       reasoning: {
-        efforts: EFFORTS.map(id => ({ id: ReasoningEffortId(id), name: ({ off: '关闭', low: '低', high: '高', max: '最高' })[id], description: '发送 DeepSeek 官方推理参数，实际效果由网关决定' })),
-        defaultEffort: ReasoningEffortId(p.reasoningEffort),
+        efforts: (m?.reasoningEfforts ?? EFFORTS).map(id => ({ id: ReasoningEffortId(id), name: ({ off: '关闭', low: '低', high: '高', max: '最高' })[id], description: '发送兼容网关推理参数，实际效果由上游决定' })),
+        defaultEffort: ReasoningEffortId(m?.defaultReasoningEffort ?? p.reasoningEffort),
       },
     };
   }

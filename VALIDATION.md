@@ -1,14 +1,14 @@
 # 验收记录
 
-当前插件版本：`0.2.1`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。
+当前插件版本：`0.3.0`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。
 
 本地自动化验收覆盖：
 
 - 自动化测试覆盖：SSE UTF-8 分片、推理与文本交错、分片工具参数、多工具身份、工具结果图片、尾部 usage、空响应、异常 JSON、断流、取消、超时、鉴权/限流/额度/上下文/协议错误、配置动态增删与 revision 冲突、无效更新回滚、页面发现失败与手工模型保存、模型发现鉴权与去重。
-- 17 项测试通过，包括发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏和 GitHub 版本检查失败降级。
+- 18 项测试通过，包括发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
 - `npm run typecheck` 和 `npm run build` 通过。
 - 浏览器产物使用 dsh `window.__ModuleLoader__` 入口，Host 产物为独立 ESM。
-- 独立 `DSH_HOME` 下使用 DSH `0.2.0-rc.2` 执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现“第三方 DeepSeek”及两个添加按钮。
+- 独立 `DSH_HOME` 下使用 DSH `0.2.0-rc.2` 执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现第三方模型网关和官方模型预设入口。
 - 页面真实保存深极云算预填配置成功，编辑表单出现；聊天模型选择器列出并可选择本网关的 `DeepSeek V4.1 Flash`，显示默认推理等级“高”。验收配置不写入 API Key。
 - Models 页会自动读取公开 GitHub Releases 并按 6 小时缓存比较版本；新版本显示发布页和带标签安装地址，网络失败不影响配置和模型请求。由于 DSH 0.2 插件管理器当前不支持原地升级，未实现后台卸载、替换或重启。
 - UI 适配回归覆盖 DSH 原生设计令牌、卡片/编辑器/模型列表/发现区域的 DOM 结构、卸载清理和无硬编码颜色检查；客户端样式使用 `--dsw-alias-*`、`--dsw-radius-*` 和 `--ds-font-family-code`。

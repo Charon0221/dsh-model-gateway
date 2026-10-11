@@ -68,6 +68,22 @@ test('official effort fields and reasoning history survive tool round trips', as
   assert.deepEqual(title.thinking, { type: 'disabled' });
   assert.equal(title.reasoning_effort, undefined);
 });
+test('official model defaults and user capability overrides apply per model', async () => {
+  const p = profile({ models: [{ id: 'gpt-4.1' }, { id: 'custom', reasoningEfforts: ['off'], defaultReasoningEffort: 'off', supportsTools: false, defaultTemperature: .2 }] });
+  const adapter = new GatewayAdapter({ profiles: () => new Map([['test', p]]), resolveApiKey: async () => 'key' });
+  const gpt = await adapter.resolveModel('test', 'gpt-4.1');
+  assert.deepEqual(gpt.inputModalities, ['text', 'image']);
+  assert.equal(gpt.context?.contextWindow, 1047576);
+  assert.equal(gpt.defaultMaxTokens, 32768);
+  assert.deepEqual(gpt.reasoning?.efforts.map(e => String(e.id)), ['off']);
+  const body = await serializeRequest({ ...options(), model: 'gpt-4.1', tools: [{ name: 'lookup', parameters: { type: 'object' } }] }, p);
+  assert.equal(body.temperature, 1);
+  assert.equal(body.reasoning_effort, undefined);
+  const custom = await serializeRequest({ ...options(), model: 'custom', tools: [{ name: 'lookup', parameters: { type: 'object' } }] }, p);
+  assert.equal(custom.temperature, .2);
+  assert.equal('tools' in custom, false);
+  await assert.rejects(serializeRequest({ ...options(), model: 'custom', reasoningEffort: ReasoningEffortId('high') }, p), code('UNSUPPORTED_REASONING_EFFORT'));
+});
 
 const ref = { attachmentId: 'image-one', mediaType: 'image/png', width: 20, height: 10, bytes: 3, name: 'shot.png', depth: 'uchar', space: 'srgb', hasAlpha: false } as unknown as ImageAttachmentRef;
 const attachments = { readImageRequest: async (image: ImageAttachmentRef) => ({ attachment: image, variantId: 'variant', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png', bytes: 3, width: 20, height: 10, depth: 'uchar', space: 'srgb', hasAlpha: false } as RequestImageAttachment) } as AttachmentStore;

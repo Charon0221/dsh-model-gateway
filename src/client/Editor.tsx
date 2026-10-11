@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { CredentialInfo, LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client';
-import { EFFORTS, keyRefFor, SENJIX_PRESET, type GatewayModel, type GatewayProfile } from '../shared.js';
+import type { CredentialInfo } from '@deepseek-ai/dsh-api-remotes/client';
+import { EFFORTS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile } from '../shared.js';
+import { OFFICIAL_MODEL_CATALOG } from '../catalog.js';
 import { SaveTransaction, validateDraft, type ClientOperations } from './controller.js';
 
 export interface EditorProps {
@@ -23,7 +24,7 @@ export function GatewayEditor(props: EditorProps) {
   const [busy, setBusy] = useState(false);
   const [committed, setCommitted] = useState(false);
   const [failure, setFailure] = useState('');
-  const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[]>([]);
+  const [candidates, setCandidates] = useState<readonly GatewayModel[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [confirmKeyRemoval, setConfirmKeyRemoval] = useState(false);
@@ -41,6 +42,13 @@ export function GatewayEditor(props: EditorProps) {
     return () => { current = false; };
   }, [keyRef, props.operations]);
   const modelChange = (index: number, patch: Partial<GatewayModel>) => setDraft(p => ({ ...p, models: p.models.map((m, i) => i === index ? { ...m, ...patch } : m) }));
+  const toggleEffort = (index: number, effort: Effort, checked: boolean) => setDraft(p => ({ ...p, models: p.models.map((m, i) => {
+    if (i !== index) return m;
+    const efforts = new Set(m.reasoningEfforts ?? EFFORTS);
+    checked ? efforts.add(effort) : efforts.delete(effort);
+    const next = EFFORTS.filter(value => efforts.has(value));
+    return { ...m, reasoningEfforts: next.length ? next : ['off'], defaultReasoningEffort: next.includes(m.defaultReasoningEffort ?? 'high') ? m.defaultReasoningEffort : next[0] };
+  }) }));
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setFailure('');
     try { await fn(); } catch (error) { if (mounted.current) setFailure(error instanceof Error ? error.message : '操作失败'); }
@@ -56,10 +64,17 @@ export function GatewayEditor(props: EditorProps) {
     const result = await props.operations.discover({ provider: props.route, baseURL: draft.baseURL, ...(key.trim() ? { apiKey: key.trim() } : {}) });
     if (mounted.current) { setCandidates(result); setSelected(new Set()); if (!result.length) setFailure('网关未公布模型，请手工添加'); }
   });
+  const loadOfficialPresets = () => {
+    const existing = new Set(draft.models.map(model => model.id));
+    setCandidates(OFFICIAL_MODEL_CATALOG.filter(model => !existing.has(model.id)).map(model => ({ ...model, inputModalities: [...model.inputModalities], reasoningEfforts: [...model.reasoningEfforts] })));
+    setSelected(new Set());
+    setQuery('');
+    setFailure('');
+  };
   const visible = candidates.filter(m => `${m.id} ${m.name ?? ''}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="dsg-editor">
     <header className="dsg-editor-header">
-      <div><h3 className="dsg-editor-title">{creating ? '添加第三方 DeepSeek' : '编辑网关'}</h3><span className="dsg-editor-route">{route || '新网关'}</span></div>
+      <div><h3 className="dsg-editor-title">{creating ? '添加模型网关' : '编辑网关'}</h3><span className="dsg-editor-route">{route || '新网关'}</span></div>
     </header>
     <div className="dsg-fields dsg-fields-primary">
       <label className="dsg-field"><span>提供方 ID</span><input value={route} disabled={locked || !creating} onChange={e => setRoute(e.target.value)} placeholder="my-deepseek" /></label>
@@ -79,14 +94,15 @@ export function GatewayEditor(props: EditorProps) {
     </div>}
     <div className="dsg-section-heading"><div><h4>模型能力</h4><p>显式声明模型支持的输入类型和容量。</p></div><div className="dsg-actions dsg-actions-compact">
       <button className="dsg-button dsg-button-secondary" type="button" disabled={locked} onClick={() => setDraft(p => ({ ...p, models: [...p.models, { id: '', inputModalities: ['text'] }] }))}>手工添加模型</button>
-      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked || !draft.baseURL.trim()} onClick={discover}>获取可用模型</button>
+      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked} onClick={loadOfficialPresets}>添加官方预设</button>
+      <button className="dsg-button dsg-button-secondary" type="button" disabled={locked || !draft.baseURL.trim()} onClick={discover}>获取深极云算模型</button>
     </div>
     </div>
     {candidates.length > 0 && <fieldset disabled={locked} className="dsg-discovery"><legend>选择模型</legend>
       <div className="dsg-discovery-toolbar"><label className="dsg-field"><span>搜索模型</span><input value={query} onChange={e => setQuery(e.target.value)} /></label><div className="dsg-actions dsg-actions-compact"><button className="dsg-button dsg-button-quiet" type="button" onClick={() => setSelected(p => new Set([...p, ...visible.map(m => m.id)]))}>全选可见</button><button className="dsg-button dsg-button-quiet" type="button" onClick={() => setSelected(new Set())}>取消全选</button></div></div>
-      <div className="dsg-candidates">{visible.length ? visible.map(m => <label key={m.id}><input type="checkbox" checked={selected.has(m.id)} onChange={e => setSelected(p => { const next = new Set(p); e.target.checked ? next.add(m.id) : next.delete(m.id); return next; })} /><code>{m.id}</code></label>) : <p className="dsg-empty">没有匹配的模型</p>}</div>
+      <div className="dsg-candidates">{visible.length ? visible.map(m => <label key={m.id}><input type="checkbox" checked={selected.has(m.id)} onChange={e => setSelected(p => { const next = new Set(p); e.target.checked ? next.add(m.id) : next.delete(m.id); return next; })} /><code>{m.id}</code><span className="dsg-candidate-meta">{m.name ?? '未知模型'} · {m.contextWindow ? `${m.contextWindow.toLocaleString()} 上下文` : '默认容量'} · {m.inputModalities?.includes('image') ? '图片' : '文本'}</span></label>) : <p className="dsg-empty">没有匹配的模型</p>}</div>
       <button className="dsg-button dsg-button-primary" type="button" disabled={!selected.size} onClick={() => {
-        setDraft(p => ({ ...p, models: [...p.models, ...candidates.filter(m => selected.has(m.id) && !p.models.some(old => old.id === m.id)).map(m => ({ ...m, inputModalities: ['text'] as ('text' | 'image')[] }))] }));
+        setDraft(p => ({ ...p, models: [...p.models, ...candidates.filter(m => selected.has(m.id) && !p.models.some(old => old.id === m.id)).map(m => ({ ...m }))] }));
         setCandidates([]); setSelected(new Set());
       }}>添加所选</button>
     </fieldset>}
@@ -98,6 +114,8 @@ export function GatewayEditor(props: EditorProps) {
         <label className="dsg-field"><span>输出上限</span><input type="number" min="1" step="1" value={m.maxTokens ?? ''} placeholder="32768（回退值）" onChange={e => modelChange(i, { maxTokens: e.target.value ? Number(e.target.value) : undefined })} /></label>
       </div>
       <label className="dsg-checkbox"><input type="checkbox" checked={m.inputModalities?.includes('image') ?? false} onChange={e => modelChange(i, { inputModalities: e.target.checked ? ['text', 'image'] : ['text'] })} />支持图片输入</label>
+      <div className="dsg-model-options"><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsTools !== false} onChange={e => modelChange(i, { supportsTools: e.target.checked })} />支持工具调用</label><label className="dsg-field dsg-field-inline"><span>默认 temperature</span><input type="number" min="0" max="2" step="0.1" value={m.defaultTemperature ?? ''} placeholder="按官方默认" onChange={e => modelChange(i, { defaultTemperature: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
+      <div className="dsg-efforts"><span className="dsg-field-label">支持的推理档位</span>{EFFORTS.map(effort => <label key={effort} className="dsg-checkbox"><input type="checkbox" checked={(m.reasoningEfforts ?? EFFORTS).includes(effort)} onChange={e => toggleEffort(i, effort, e.target.checked)} />{effort}</label>)}<label className="dsg-field dsg-field-inline"><span>默认档位</span><select value={m.defaultReasoningEffort ?? 'high'} onChange={e => modelChange(i, { defaultReasoningEffort: e.target.value as Effort })}>{(m.reasoningEfforts ?? EFFORTS).map(effort => <option key={effort}>{effort}</option>)}</select></label></div>
       <button className="dsg-button dsg-button-danger dsg-button-small" type="button" onClick={() => setDraft(p => ({ ...p, models: p.models.filter((_, index) => index !== i) }))}>移除模型</button>
     </fieldset>) : <p className="dsg-empty dsg-empty-models">还没有模型，请手工添加或获取网关模型列表。</p>}</div>
     {committed && <p className="dsg-success" role="status">网关配置已保存，请重试密钥保存；配置字段已锁定。</p>}

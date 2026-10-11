@@ -23,8 +23,9 @@ export interface SerializationServices {
 
 export async function serializeRequest(options: GenerateOptions, profile: ResolvedProfile, services: SerializationServices = {}): Promise<Record<string, unknown>> {
   const model = profile.models.find(m => m.id === options.model);
-  const effort = options.purpose === 'session-title' ? 'off' : options.reasoningEffort ?? profile.reasoningEffort;
+  const effort = options.purpose === 'session-title' ? 'off' : options.reasoningEffort ?? model?.defaultReasoningEffort ?? profile.reasoningEffort;
   if (!EFFORTS.includes(effort as typeof EFFORTS[number])) throw new LlmError('不支持的 DeepSeek 推理强度', 'UNSUPPORTED_REASONING_EFFORT');
+  if (options.purpose !== 'session-title' && model?.reasoningEfforts && !model.reasoningEfforts.includes(effort as typeof EFFORTS[number])) throw new LlmError(`${options.model} 不支持推理档位 ${effort}`, 'UNSUPPORTED_REASONING_EFFORT');
   const imageCapable = model?.inputModalities?.includes('image') === true;
   const projected = projectToolUpdates(options.messages, options.tools, undefined, options.toolHistory);
   const hasImages = projected.messages.some(m => contentHasImage(m.content));
@@ -125,9 +126,9 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
     thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
     ...(effort === 'off' ? {} : { reasoning_effort: effort }),
     max_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens,
-    ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
+    ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
     ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(projected.tools?.length ? { tools: projected.tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })) } : {}),
+    ...(projected.tools?.length && model?.supportsTools !== false ? { tools: projected.tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })) } : {}),
   };
 }
 

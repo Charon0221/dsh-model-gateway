@@ -1,5 +1,6 @@
 import { LlmError, assertUsableApiKey, type LlmModelDiscoveryRequest, type LlmDiscoveredModel } from '@deepseek-ai/dsh-llm';
 import { apiBaseURL, type ResolvedProfile } from './config.js';
+import { enrichModel, officialModelDefaults } from './catalog.js';
 import { cancellable, httpFailure, idleControl, requestHeaders } from './http.js';
 
 export async function discoverModels(
@@ -23,8 +24,10 @@ export async function discoverModels(
     return list.flatMap((entry: Record<string, unknown>) => {
       if (!entry || typeof entry.id !== 'string' || !entry.id.trim() || seen.has(entry.id)) return [];
       seen.add(entry.id);
-      return [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : undefined,
-        contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) }];
+      const enriched = enrichModel({ id: entry.id, name: typeof entry.name === 'string' ? entry.name : undefined,
+        contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) });
+      if (!officialModelDefaults(entry.id)) delete enriched.inputModalities;
+      return [enriched];
     });
   } catch (error) { throw idle.classify(error); }
   finally { idle.dispose(); }
