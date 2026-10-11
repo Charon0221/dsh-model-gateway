@@ -24,9 +24,10 @@ export async function discoverModels(
     return list.flatMap((entry: Record<string, unknown>) => {
       if (!entry || typeof entry.id !== 'string' || !entry.id.trim() || seen.has(entry.id)) return [];
       seen.add(entry.id);
-      const enriched = enrichModel({ id: entry.id, name: typeof entry.name === 'string' ? entry.name : undefined,
-        contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) });
-      if (!officialModelDefaults(entry.id)) delete enriched.inputModalities;
+      const official = officialModelDefaults(entry.id);
+      const enriched = enrichModel({ id: entry.id,
+        ...(official ? {} : { name: typeof entry.name === 'string' ? entry.name : undefined, contextWindow: positive(entry.context_window ?? entry.contextWindow), maxTokens: positive(entry.max_tokens ?? entry.maxTokens) }) });
+      if (!official) delete enriched.inputModalities;
       return [enriched];
     });
   } catch (error) { throw idle.classify(error); }

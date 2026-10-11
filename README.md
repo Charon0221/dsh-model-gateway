@@ -11,15 +11,15 @@
 在其他 DeepSeek Harness 桌面端的“设置 → 插件 → 添加插件”中输入：
 
 ```text
-https://github.com/Charon0221/dsh-model-gateway#v0.3.0
+https://github.com/Charon0221/dsh-model-gateway#v0.3.1
 ```
 
-也可以下载 [v0.3.0 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.3.0/dsh-model-gateway-0.3.0.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
+也可以下载 [v0.3.1 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.3.1/dsh-model-gateway-0.3.1.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
 
 命令行安装：
 
 ```powershell
-dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.3.0
+dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.3.1
 ```
 
 本地开发：

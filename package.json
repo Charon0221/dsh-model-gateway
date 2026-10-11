@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-gateway",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "深极云算多模型 Chat Completions 适配器与 dsh Models 页面扩展",
   "type": "module",
   "license": "MIT",
