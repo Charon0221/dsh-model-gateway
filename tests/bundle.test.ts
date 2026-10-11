@@ -35,3 +35,10 @@ test('distributed client loads through harness module loader and disposes slots/
   assert.equal(dom.window.document.head.querySelectorAll('style').length, 0);
   dom.window.close();
 });
+
+test('bundle patch loads the renamed package while preserving the legacy plugin id', async () => {
+  const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
+  assert.match(patch, /id:\s*llm-deepseek-gateway/);
+  assert.match(patch, /name:\s*dsh-model-gateway/);
+  assert.doesNotMatch(patch, /name:\s*dsh-deepseek-gateway/);
+});
