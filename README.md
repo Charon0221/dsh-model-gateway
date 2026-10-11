@@ -11,15 +11,15 @@
 在其他 DeepSeek Harness 桌面端的“设置 → 插件 → 添加插件”中输入：
 
 ```text
-https://github.com/Charon0221/dsh-model-gateway#v0.3.4
+https://github.com/Charon0221/dsh-model-gateway#v0.4.0
 ```
 
-也可以下载 [v0.3.4 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.3.4/dsh-model-gateway-0.3.4.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
+也可以下载 [v0.4.0 安装包](https://github.com/Charon0221/dsh-model-gateway/releases/download/v0.4.0/dsh-model-gateway-0.4.0.tgz)，输入本地完整路径。安装后按桌面端提示重启，再到 Models 页配置深极云算凭据。
 
 命令行安装：
 
 ```powershell
-dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.3.4
+dsh plugin --profile web add github:Charon0221/dsh-model-gateway#v0.4.0
 ```
 
 本地开发：
@@ -51,12 +51,31 @@ llm-deepseek-gateway:
           defaultReasoningEffort: high
           supportsTools: true
           defaultTemperature: 1
+          nativeSearch: none
+          supportsWebSearch: true
       reasoningEffort: high
+      webSearch:
+        enabled: true
+        allowGenericFallback: true
+        maxUses: 5
+        timeoutMs: 30000
 ```
 
 模型发现调用 `GET {baseURL}/models`，会列出深极云算当前公布的全部模型。发现失败仍可使用“添加官方预设”或手工添加模型。模型能力不会因为上游目录声明而强制启用，图片能力必须由用户确认。
 
 模型条目支持 `contextWindow`、`maxTokens`、`inputModalities`、`reasoningEfforts`、`defaultReasoningEffort`、`supportsTools`、`defaultTemperature`、`imagePixelBudget` 和 `imageMaxBytes`。用户字段优先于官方目录默认值，官方目录优先于上游容量字段，未知模型使用安全回退值。
+
+## 网页搜索
+
+DSH 的网页搜索 provider 与聊天模型是两个独立扩展点。使用本插件提供的网关搜索时，在 DSH 启动环境或 Web 设置中选择：
+
+```text
+DSH_WEB_SEARCH_PROVIDER=model-gateway-web
+```
+
+模型条目声明 `nativeSearch: openai-responses`、`openai-chat` 或 `anthropic-messages` 时，网关会优先透传对应的原生搜索能力，并解析返回的引用。`nativeSearch: none` 或未知模型使用网关的通用搜索配置。上游拒绝搜索参数时会明确报错，不会偷偷改成另一种协议或重复执行搜索。
+
+如果仍看到 `DeepSeek API error (HTTP 402): Insufficient Balance`，说明 DSH 仍选择了官方 `deepseek-official` 搜索 provider；请检查上述 provider 选择和网关凭据，而不是把官方 DeepSeek 密钥写入本插件配置。
 
 ## 开发与验证
 

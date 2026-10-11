@@ -9,4 +9,11 @@ llm-deepseek-gateway:
         - id: deepseek-v4.1-flash
           name: DeepSeek V4.1 Flash
           inputModalities: [text]
+          nativeSearch: none
+          supportsWebSearch: true
       reasoningEffort: high
+      webSearch:
+        enabled: true
+        allowGenericFallback: true
+        maxUses: 5
+        timeoutMs: 30000

@@ -9,4 +9,11 @@
         models:
           - id: deepseek-v4.1-flash
             inputModalities: [text]
+            nativeSearch: none
+            supportsWebSearch: true
         reasoningEffort: high
+        webSearch:
+          enabled: true
+          allowGenericFallback: true
+          maxUses: 5
+          timeoutMs: 30000

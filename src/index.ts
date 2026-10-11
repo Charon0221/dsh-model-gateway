@@ -7,17 +7,19 @@ import type {} from '@deepseek-ai/dsh-settings';
 import type {} from '@deepseek-ai/dsh-credentials';
 import type {} from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-fs';
+import type {} from '@deepseek-ai/dsh-web';
 import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment';
 import { GatewayAdapter } from './adapter.js';
 import { Config, resolveProfiles, type ResolvedProfile, type LiveConfig } from './config.js';
 import { discoverModels } from './discovery.js';
 import { NS } from './shared.js';
+import { GatewayWebSearchProvider } from './web.js';
 
 export { Config, resolveProfiles, GatewayAdapter, discoverModels };
-export type { GatewayModel, GatewayProfile, Effort } from './shared.js';
+export type { GatewayModel, GatewayProfile, Effort, NativeSearchMode } from './shared.js';
 export const name = NS;
-export const inject = ['llm'];
+export const inject = ['llm', 'web'];
 
 export function apply(ctx: Context, config: LiveConfig): void {
   const source = (): import('./config.js').Config => ({ providers: config.providers.get() as import('./config.js').Config['providers'] });
@@ -89,6 +91,10 @@ export function apply(ctx: Context, config: LiveConfig): void {
       };
     },
   });
+  (ctx as any).get?.('web')?.registerSearchProvider(new GatewayWebSearchProvider(current, key, () => {
+    const agents = (ctx as any).get?.('agents');
+    return agents?.currentInitiator?.()?.session?.requestContext?.()?.provider;
+  }));
   synchronize();
   ctx.llm.registerModelDiscovery(NS, (request, signal) => discoverModels(request, current(), key, signal));
   ctx.on('loader/volatile-update', () => { current(); });

@@ -1,4 +1,4 @@
-import { type Effort, type GatewayModel, type ModelModality } from './shared.js';
+import { type Effort, type GatewayModel, type ModelModality, type NativeSearchMode } from './shared.js';
 export interface OfficialModelDefaults {
     id: string;
     name: string;
@@ -10,6 +10,7 @@ export interface OfficialModelDefaults {
     defaultReasoningEffort: Effort;
     supportsTools: boolean;
     defaultTemperature?: number;
+    nativeSearch?: NativeSearchMode;
 }
 export declare const OFFICIAL_MODEL_CATALOG: readonly OfficialModelDefaults[];
 export declare function officialModelDefaults(id: string): OfficialModelDefaults | undefined;

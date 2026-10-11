@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { CredentialInfo } from '@deepseek-ai/dsh-api-remotes/client';
-import { EFFORTS, PROTOCOLS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from '../shared.js';
+import { EFFORTS, NATIVE_SEARCH_MODES, PROTOCOLS, keyRefFor, SENJIX_PRESET, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from '../shared.js';
 import { OFFICIAL_MODEL_CATALOG } from '../catalog.js';
 import { SaveTransaction, validateDraft, type ClientOperations } from './controller.js';
 
@@ -85,7 +85,12 @@ export function GatewayEditor(props: EditorProps) {
       <label className="dsg-field"><span>API Key</span><input type="password" autoComplete="off" value={key} disabled={busy || !props.writable || credential?.writable === false} onChange={e => setKey(e.target.value)} placeholder={credential?.configured ? '已配置；留空保持当前密钥' : '填写密钥或通过环境变量配置'} /></label>
       <label className="dsg-field"><span>默认推理强度</span><select value={draft.reasoningEffort ?? 'high'} disabled={locked} onChange={e => setDraft(p => ({ ...p, reasoningEffort: e.target.value as GatewayProfile['reasoningEffort'] }))}>{EFFORTS.map(e => <option key={e}>{e}</option>)}</select></label>
     </div>
-    <p className="dsg-hint">推理参数使用 DeepSeek 官方协议；图片输入须由模型和网关实际支持。凭据只写入 dsh 凭据存储。</p>
+    <p className="dsg-hint">推理和搜索参数按模型声明发送；未声明原生搜索的模型使用 DSH 通用网页搜索。凭据只写入 dsh 凭据存储。</p>
+    <div className="dsg-fields dsg-search-settings">
+      <label className="dsg-field"><span>DSH 网页搜索</span><select value={draft.webSearch?.enabled === false ? 'off' : 'on'} disabled={locked} onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, enabled: e.target.value === 'on' } }))}><option value="on">启用</option><option value="off">关闭</option></select></label>
+      <label className="dsg-field"><span>搜索模型覆盖</span><input value={draft.webSearch?.model ?? ''} disabled={locked} placeholder="留空使用首个可搜索模型" onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, model: e.target.value || undefined } }))} /></label>
+      <label className="dsg-field"><span>最大搜索次数</span><input type="number" min="1" step="1" value={draft.webSearch?.maxUses ?? ''} disabled={locked} placeholder="5" onChange={e => setDraft(p => ({ ...p, webSearch: { ...p.webSearch, maxUses: e.target.value ? Number(e.target.value) : undefined } }))} /></label>
+    </div>
     {credential?.configured && credential.writable && <div className="dsg-inline-warning">
       {confirmKeyRemoval ? <><span>删除凭据 {keyRef}？其他使用此引用的网关也会受到影响。</span><button className="dsg-button dsg-button-danger" type="button" disabled={busy || committed || !props.writable} onClick={() => run(async () => {
         await props.operations.removeKey(keyRef);
@@ -115,7 +120,8 @@ export function GatewayEditor(props: EditorProps) {
         <label className="dsg-field"><span>输出上限</span><input type="number" min="1" step="1" value={m.maxTokens ?? ''} placeholder="32768（回退值）" onChange={e => modelChange(i, { maxTokens: e.target.value ? Number(e.target.value) : undefined })} /></label>
       </div>
       <label className="dsg-checkbox"><input type="checkbox" checked={m.inputModalities?.includes('image') ?? false} onChange={e => modelChange(i, { inputModalities: e.target.checked ? ['text', 'image'] : ['text'] })} />支持图片输入</label>
-      <div className="dsg-model-options"><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsTools !== false} onChange={e => modelChange(i, { supportsTools: e.target.checked })} />支持工具调用</label><label className="dsg-field dsg-field-inline"><span>默认 temperature</span><input type="number" min="0" max="2" step="0.1" value={m.defaultTemperature ?? ''} placeholder="按官方默认" onChange={e => modelChange(i, { defaultTemperature: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
+      <div className="dsg-model-options"><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsTools !== false} onChange={e => modelChange(i, { supportsTools: e.target.checked })} />支持工具调用</label><label className="dsg-checkbox"><input type="checkbox" checked={m.supportsWebSearch !== false} onChange={e => modelChange(i, { supportsWebSearch: e.target.checked })} />允许网页搜索工具</label><label className="dsg-field dsg-field-inline"><span>默认 temperature</span><input type="number" min="0" max="2" step="0.1" value={m.defaultTemperature ?? ''} placeholder="按官方默认" onChange={e => modelChange(i, { defaultTemperature: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
+      <div className="dsg-model-options"><label className="dsg-field dsg-field-inline"><span>原生搜索</span><select value={m.nativeSearch ?? 'none'} onChange={e => modelChange(i, { nativeSearch: e.target.value as GatewayModel['nativeSearch'] })}>{NATIVE_SEARCH_MODES.map(mode => <option key={mode} value={mode}>{mode === 'none' ? '关闭（使用通用搜索）' : mode === 'openai-chat' ? 'OpenAI Chat Completions' : mode === 'openai-responses' ? 'OpenAI Responses' : 'Anthropic Messages'}</option>)}</select></label><label className="dsg-field dsg-field-inline"><span>最大搜索次数</span><input type="number" min="1" step="1" value={m.nativeSearchMaxUses ?? ''} placeholder="5" onChange={e => modelChange(i, { nativeSearchMaxUses: e.target.value ? Number(e.target.value) : undefined })} /></label></div>
       <div className="dsg-efforts"><span className="dsg-field-label">支持的推理档位</span>{EFFORTS.map(effort => <label key={effort} className="dsg-checkbox"><input type="checkbox" checked={(m.reasoningEfforts ?? EFFORTS).includes(effort)} onChange={e => toggleEffort(i, effort, e.target.checked)} />{effort}</label>)}<label className="dsg-field dsg-field-inline"><span>默认档位</span><select value={m.defaultReasoningEffort ?? 'high'} onChange={e => modelChange(i, { defaultReasoningEffort: e.target.value as Effort })}>{(m.reasoningEfforts ?? EFFORTS).map(effort => <option key={effort}>{effort}</option>)}</select></label></div>
       <button className="dsg-button dsg-button-danger dsg-button-small" type="button" onClick={() => setDraft(p => ({ ...p, models: p.models.filter((_, index) => index !== i) }))}>移除模型</button>
     </fieldset>) : <p className="dsg-empty dsg-empty-models">还没有模型，请手工添加或获取网关模型列表。</p>}</div>

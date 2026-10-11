@@ -1,16 +1,17 @@
 # 验收记录
 
-当前插件版本：`0.3.2`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议。
+当前插件版本：`0.4.0`。开发与安装验收基线：DSH `0.2.0-rc.2`，Node 24。仅支持 0.2+。网关支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种协议，并支持网关原生搜索与 DSH `ctx.web` 搜索 provider。
 
 本地自动化验收覆盖：
 
 - 自动化测试覆盖：SSE UTF-8 分片、推理与文本交错、分片工具参数、多工具身份、工具结果图片、尾部 usage、空响应、异常 JSON、断流、取消、超时、鉴权/限流/额度/上下文/协议错误、配置动态增删与 revision 冲突、无效更新回滚、页面发现失败与手工模型保存、模型发现鉴权与去重。
-- 20 项测试通过，包括三种协议的请求与流转换、发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
+- 24 项测试通过，包括三种协议的请求与流转换、原生搜索工具替换、网关 web provider 引用归一化、发布客户端的模块加载、插槽注册与卸载清理、设置 schema 跨 Remote JSON 恢复、请求头脱敏、动态模型发现和官方模型默认值覆盖。
 - `npm run typecheck` 和 `npm run build` 通过。
 - 浏览器产物使用 dsh `window.__ModuleLoader__` 入口，Host 产物为独立 ESM。
 - 独立 `DSH_HOME` 下使用 DSH `0.2.0-rc.2` 执行 `dsh plugin --profile web add <tgz>` 成功，配置树加入插件，Web profile 启动成功，浏览器 Models 页出现第三方模型网关和官方模型预设入口。
 - 页面真实保存深极云算预填配置成功，编辑表单出现；聊天模型选择器列出并可选择本网关的 `DeepSeek V4.1 Flash`，显示默认推理等级“高”。验收配置不写入 API Key。
 - Models 页会自动读取公开 GitHub Releases 并按 6 小时缓存比较版本；新版本显示发布页和带标签安装地址，网络失败不影响配置和模型请求。由于 DSH 0.2 插件管理器当前不支持原地升级，未实现后台卸载、替换或重启。
+- 使用网关网页搜索时必须选择 `DSH_WEB_SEARCH_PROVIDER=model-gateway-web`。原生搜索模型按模型条目的 `nativeSearch` 字段透传；未声明原生能力的模型使用通用网关搜索配置。官方 `deepseek-official` provider 不会被插件自动覆盖。
 - UI 适配回归覆盖 DSH 原生设计令牌、卡片/编辑器/模型列表/发现区域的 DOM 结构、卸载清理和无硬编码颜色检查；客户端样式使用 `--dsw-alias-*`、`--dsw-radius-*` 和 `--ds-font-family-code`。
 - 使用 DSH 自身兼容性检查函数验证：拒绝 `0.1.5-rc.2`，接受 `0.2.0-rc.2`、`0.2.0`、`0.2.1-alpha.1` 和 `0.3.0`。后两项仅验证安装范围，不代表已经实测未来运行时。
 - 桌面端安装使用同一 bundle patch 和官方 `web` 客户端声明。GitHub 仓库提交 `lib` 构建产物，适合通过桌面端的 GitHub URL 输入框安装。另一台机器的桌面端安装尚未实机执行；当前验证覆盖本机相同 Web 渲染模块与隔离 profile。

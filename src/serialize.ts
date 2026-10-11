@@ -1,7 +1,7 @@
 import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment';
 import * as DshLlm from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver } from '@deepseek-ai/dsh-llm';
-import { EFFORTS, type GatewayModel, type GatewayProtocol } from './shared.js';
+import { EFFORTS, type GatewayModel, type GatewayProtocol, type NativeSearchMode } from './shared.js';
 import type { ResolvedProfile } from './config.js';
 
 const { LlmError, contentHasImage, projectImagesForTextModel, offloadedImageText, requestImageHandleText, fileHandleText } = DshLlm;
@@ -24,6 +24,17 @@ export interface WireMessage {
 
 type ToolSchemaWire = { name: string; description?: string; parameters: unknown };
 
+function nativeSearchFor(model: GatewayModel | undefined, protocol: GatewayProtocol, tools: ToolSchemaWire[] | undefined): NativeSearchMode | undefined {
+  if (!model?.nativeSearch || model.nativeSearch === 'none' || !tools?.some(tool => tool.name === 'web_search')) return undefined;
+  const expected = protocol === 'responses' ? 'openai-responses' : protocol === 'anthropic-messages' ? 'anthropic-messages' : 'openai-chat';
+  if (model.nativeSearch !== expected) throw new LlmError(`${model.id} 的原生搜索协议与网关协议不匹配`, 'NATIVE_SEARCH_PROTOCOL_MISMATCH');
+  return model.nativeSearch;
+}
+
+function splitSearchTool(tools: ToolSchemaWire[] | undefined, native: NativeSearchMode | undefined) {
+  return native ? { tools: tools?.filter(tool => tool.name !== 'web_search'), hasNative: true } : { tools, hasNative: false };
+}
+
 function responseParts(parts: WirePart[], role: 'user' | 'assistant') {
   return parts.map(part => part.type === 'text'
     ? { type: role === 'assistant' ? 'output_text' : 'input_text', text: part.text }
@@ -39,6 +50,8 @@ function toolArguments(value: string): Record<string, unknown> {
 }
 
 function responseBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined, options: GenerateOptions, model: GatewayModel | undefined, effort: string): Record<string, unknown> {
+  const native = nativeSearchFor(model, 'responses', tools);
+  const selected = splitSearchTool(tools, native);
   const instructions = wire.filter(message => message.role === 'system').map(message => typeof message.content === 'string' ? message.content : textParts(message.content)).join('\n');
   const input: unknown[] = [];
   for (const message of wire) {
@@ -63,7 +76,8 @@ function responseBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined, 
     max_output_tokens: options.maxTokens ?? model?.maxTokens,
     ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
     ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(tools?.length && model?.supportsTools !== false ? { tools: tools.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })) } : {}),
+    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })) } : {}),
+    ...(native ? { tools: [...(selected.tools ?? []).map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })), { type: String(model?.nativeSearchConfig?.type ?? 'web_search_preview'), ...(model?.nativeSearchConfig ?? {}) }] } : {}),
   };
 }
 
@@ -75,6 +89,8 @@ function anthropicContent(content: string | WirePart[], role: 'user' | 'assistan
 }
 
 function anthropicBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined, options: GenerateOptions, model: GatewayModel | undefined, effort: string): Record<string, unknown> {
+  const native = nativeSearchFor(model, 'anthropic-messages', tools);
+  const selected = splitSearchTool(tools, native);
   const system = wire.filter(message => message.role === 'system').map(message => typeof message.content === 'string' ? message.content : textParts(message.content)).join('\n');
   const messages: unknown[] = [];
   for (const message of wire) {
@@ -99,7 +115,8 @@ function anthropicBody(wire: WireMessage[], tools: ToolSchemaWire[] | undefined,
     ...(effort === 'off' ? {} : { thinking: { type: 'enabled', budget_tokens: Math.max(1024, Math.min((options.maxTokens ?? model?.maxTokens ?? 32768) - 1, effort === 'low' ? 1024 : effort === 'high' ? 4096 : 8192)) } }),
     ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
     ...(options.stop === undefined ? {} : { stop_sequences: Array.isArray(options.stop) ? options.stop : [options.stop] }),
-    ...(tools?.length && model?.supportsTools !== false ? { tools: tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) } : {}),
+    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) } : {}),
+    ...(native ? { tools: [...(selected.tools ?? []).map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })), { type: 'web_search_20250305', name: 'web_search', max_uses: model?.nativeSearchMaxUses ?? 5, ...(model?.nativeSearchConfig ?? {}) }] } : {}),
   };
 }
 
@@ -214,6 +231,8 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
   const protocol: GatewayProtocol = profile.protocol ?? 'chat-completions';
   if (protocol === 'responses') return responseBody(wire, tools, options, model, effort);
   if (protocol === 'anthropic-messages') return anthropicBody(wire, tools, options, model, effort);
+  const native = nativeSearchFor(model, 'chat-completions', tools);
+  const selected = splitSearchTool(tools, native);
   return {
     model: options.model, messages: wire, stream: true, stream_options: { include_usage: true },
     thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
@@ -221,7 +240,8 @@ export async function serializeRequest(options: GenerateOptions, profile: Resolv
     max_tokens: options.maxTokens ?? model?.maxTokens ?? profile.maxTokens,
     ...(options.temperature === undefined && model?.defaultTemperature === undefined ? {} : { temperature: options.temperature ?? model?.defaultTemperature }),
     ...(options.stop === undefined ? {} : { stop: options.stop }),
-    ...(tools?.length && model?.supportsTools !== false ? { tools: tools.map(tool => ({ type: 'function', function: tool })) } : {}),
+    ...(selected.tools?.length && model?.supportsTools !== false && model?.supportsWebSearch !== false ? { tools: selected.tools.map(tool => ({ type: 'function', function: tool })) } : {}),
+    ...(native ? { web_search_options: { ...(model?.nativeSearchConfig ?? {}), ...(model?.nativeSearchMaxUses ? { max_uses: model.nativeSearchMaxUses } : {}) } } : {}),
   };
 }
 

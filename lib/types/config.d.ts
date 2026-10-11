@@ -23,6 +23,12 @@ export interface ResolvedProfile extends Omit<GatewayProfile, 'apiKeyEnv' | 'ret
     streamIdleTimeoutMs: number;
     maxInlineRequestImageBytes: number;
     maxImagesPerRequest: number;
+    webSearch: NonNullable<GatewayProfile['webSearch']> & {
+        enabled: boolean;
+        allowGenericFallback: boolean;
+        maxUses: number;
+        timeoutMs: number;
+    };
     retryPolicy: ResolvedRetryPolicy;
 }
 export declare function apiBaseURL(input: string): string;

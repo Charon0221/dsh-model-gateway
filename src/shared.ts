@@ -4,6 +4,8 @@ export const EFFORTS = ['off', 'low', 'high', 'max'] as const;
 export type Effort = typeof EFFORTS[number];
 export const PROTOCOLS = ['chat-completions', 'responses', 'anthropic-messages'] as const;
 export type GatewayProtocol = typeof PROTOCOLS[number];
+export const NATIVE_SEARCH_MODES = ['none', 'openai-chat', 'openai-responses', 'anthropic-messages'] as const;
+export type NativeSearchMode = typeof NATIVE_SEARCH_MODES[number];
 export type ModelModality = 'text' | 'image';
 export const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 export const SENJIX_PRESET = {
@@ -26,6 +28,10 @@ export interface GatewayModel {
   defaultReasoningEffort?: Effort;
   supportsTools?: boolean;
   defaultTemperature?: number;
+  nativeSearch?: NativeSearchMode;
+  nativeSearchMaxUses?: number;
+  nativeSearchConfig?: Record<string, string | number | boolean>;
+  supportsWebSearch?: boolean;
   imagePixelBudget?: number | 'low';
   imageMaxBytes?: number;
 }
@@ -43,4 +49,11 @@ export interface GatewayProfile {
   maxInlineRequestImageBytes?: number;
   maxImagesPerRequest?: number;
   retryPolicy?: import('@deepseek-ai/dsh-llm').RetryPolicyConfig;
+  webSearch?: {
+    enabled?: boolean;
+    allowGenericFallback?: boolean;
+    maxUses?: number;
+    timeoutMs?: number;
+    model?: string;
+  };
 }

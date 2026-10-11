@@ -1,7 +1,7 @@
 import z from '@deepseek-ai/schemastery';
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials';
 import { LlmError, RetryPolicySchema, resolveRetryPolicy, type ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm';
-import { EFFORTS, PROTOCOLS, keyRefFor, ROUTE_PATTERN, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from './shared.js';
+import { EFFORTS, NATIVE_SEARCH_MODES, PROTOCOLS, keyRefFor, ROUTE_PATTERN, type Effort, type GatewayModel, type GatewayProfile, type GatewayProtocol } from './shared.js';
 import { enrichModel } from './catalog.js';
 
 export interface Config { providers?: Record<string, GatewayProfile> }
@@ -13,6 +13,8 @@ export const ModelSchema: z<GatewayModel> = z.object({
   providerFamily: z.union(['deepseek', 'openai', 'anthropic', 'xai']),
   reasoningEfforts: z.array(z.union([...EFFORTS])), defaultReasoningEffort: z.union([...EFFORTS]),
   supportsTools: z.boolean(), defaultTemperature: z.number().min(0).max(2),
+  nativeSearch: z.union([...NATIVE_SEARCH_MODES]), nativeSearchMaxUses: positiveInteger(),
+  nativeSearchConfig: z.dict(z.union([z.string(), z.number(), z.boolean()])), supportsWebSearch: z.boolean(),
   imagePixelBudget: z.union([positiveInteger(), z.const('low')]),
   imageMaxBytes: positiveInteger(),
 });
@@ -23,6 +25,7 @@ export const ProfileSchema: z<GatewayProfile> = z.object({
   maxTokens: positiveInteger(), streamIdleTimeoutMs: positiveInteger().max(2147483647),
   maxInlineRequestImageBytes: positiveInteger(), maxImagesPerRequest: positiveInteger(),
   retryPolicy: RetryPolicySchema,
+  webSearch: z.object({ enabled: z.boolean(), allowGenericFallback: z.boolean(), maxUses: positiveInteger(), timeoutMs: positiveInteger(), model: z.string() }),
 });
 // Form schemas cross the Remote boundary: callbacks cannot be rehydrated there.
 // Semantic validation belongs to the Host internal/config hook before commit.
@@ -38,6 +41,7 @@ export interface ResolvedProfile extends Omit<GatewayProfile, 'apiKeyEnv' | 'ret
   streamIdleTimeoutMs: number;
   maxInlineRequestImageBytes: number;
   maxImagesPerRequest: number;
+  webSearch: NonNullable<GatewayProfile['webSearch']> & { enabled: boolean; allowGenericFallback: boolean; maxUses: number; timeoutMs: number };
   retryPolicy: ResolvedRetryPolicy;
 }
 
@@ -73,6 +77,8 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
       if (!efforts.length || efforts.some(e => !EFFORTS.includes(e))) throw new LlmError(`${route}/${m.id}: 推理档位无效`, 'INVALID_CONFIG');
       if (!efforts.includes(enriched.defaultReasoningEffort ?? 'high')) throw new LlmError(`${route}/${m.id}: 默认推理档位不在支持列表中`, 'INVALID_CONFIG');
       if (enriched.defaultTemperature !== undefined && (!Number.isFinite(enriched.defaultTemperature) || enriched.defaultTemperature < 0 || enriched.defaultTemperature > 2)) throw new LlmError(`${route}/${m.id}: 默认 temperature 必须在 0 到 2 之间`, 'INVALID_CONFIG');
+      if (enriched.nativeSearch !== undefined && !NATIVE_SEARCH_MODES.includes(enriched.nativeSearch)) throw new LlmError(`${route}/${m.id}: 原生搜索协议无效`, 'INVALID_CONFIG');
+      if (enriched.nativeSearchMaxUses !== undefined) number(enriched.nativeSearchMaxUses, 1, `${route}/${m.id}.nativeSearchMaxUses`);
       return Object.freeze({ ...enriched, inputModalities: Object.freeze([...(enriched.inputModalities ?? ['text'])]) as unknown as ('text' | 'image')[], reasoningEfforts: Object.freeze([...efforts]) as unknown as Effort[] });
     });
     const effort = raw.reasoningEffort ?? 'high';
@@ -95,6 +101,13 @@ export function resolveProfiles(config: Config): ReadonlyMap<string, ResolvedPro
       streamIdleTimeoutMs: number(raw.streamIdleTimeoutMs, 300000, `${route}.streamIdleTimeoutMs`),
       maxInlineRequestImageBytes: number(raw.maxInlineRequestImageBytes, 20 * 1024 * 1024, `${route}.maxInlineRequestImageBytes`),
       maxImagesPerRequest: number(raw.maxImagesPerRequest, 600, `${route}.maxImagesPerRequest`),
+      webSearch: {
+        enabled: raw.webSearch?.enabled ?? true,
+        allowGenericFallback: raw.webSearch?.allowGenericFallback ?? true,
+        maxUses: number(raw.webSearch?.maxUses, 5, `${route}.webSearch.maxUses`),
+        timeoutMs: number(raw.webSearch?.timeoutMs, 30000, `${route}.webSearch.timeoutMs`),
+        ...(raw.webSearch?.model ? { model: raw.webSearch.model } : {}),
+      },
       retryPolicy: resolveRetryPolicy(raw.retryPolicy, route),
     };
     if (profile.streamIdleTimeoutMs > 2147483647) throw new LlmError(`${route}: 空闲超时超出计时器范围`, 'INVALID_CONFIG');

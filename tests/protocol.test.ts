@@ -97,6 +97,20 @@ test('Responses and Anthropic protocols serialize the same dsh conversation', as
   assert.equal((anthropic.messages as any[])[2].content[0].type, 'tool_result');
 });
 
+test('native search replaces only the DSH web_search tool for each protocol', async () => {
+  const web = { name: 'web_search', description: 'search', parameters: { type: 'object' } };
+  const fn = { name: 'lookup', description: 'lookup', parameters: { type: 'object' } };
+  const responses = await serializeRequest({ ...options(), model: 'gpt-4.1', tools: [web, fn] }, profile({ protocol: 'responses', models: [{ id: 'gpt-4.1' }] }));
+  assert.deepEqual((responses.tools as any[]).map(tool => tool.type), ['function', 'web_search_preview']);
+  assert.equal((responses.tools as any[]).some(tool => tool.name === 'web_search'), false);
+  const anthropic = await serializeRequest({ ...options(), model: 'claude-sonnet-4-20250514', tools: [web, fn] }, profile({ protocol: 'anthropic-messages', models: [{ id: 'claude-sonnet-4-20250514' }] }));
+  assert.equal((anthropic.tools as any[]).some(tool => tool.type === 'web_search_20250305'), true);
+  assert.equal((anthropic.tools as any[]).some(tool => tool.name === 'web_search' && tool.input_schema), false);
+  const chat = await serializeRequest({ ...options(), model: 'grok-4', tools: [web, fn] }, profile({ models: [{ id: 'grok-4' }] }));
+  assert.ok(chat.web_search_options);
+  assert.equal((chat.tools as any[])[0].function.name, 'lookup');
+});
+
 test('Responses and Anthropic SSE streams preserve reasoning, tools, usage and finish', async () => {
   const responses = await collect(translateResponses(strings([
     JSON.stringify({ type: 'response.reasoning_summary_text.delta', delta: 'think' }),
